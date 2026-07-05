@@ -1,0 +1,2056 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>我家有谱 - Taste V3</title>
+  <style>
+    :root {
+      --bg: #f7f8f8;
+      --ink: #141d25;
+      --muted: #68737c;
+      --hairline: rgba(31, 43, 54, .075);
+      --accent: #1f6f7a;
+      --accent-soft: rgba(31, 111, 122, .1);
+      --line: rgba(35, 70, 86, .42);
+      --line-strong: rgba(31, 111, 122, .82);
+      --core: rgba(255,255,255,.92);
+      --near: rgba(250,252,251,.88);
+      --far: rgba(255,255,255,.52);
+      --panel: rgba(255,255,255,.86);
+      --shadow: 0 16px 42px rgba(25, 39, 50, .1);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { color: var(--ink); background: var(--bg); }
+    button, input, select, textarea { font: inherit; }
+    button { border: 0; color: inherit; cursor: pointer; }
+
+    .app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    .topbar {
+      position: absolute;
+      z-index: 30;
+      left: 0;
+      right: 0;
+      top: 0;
+      min-height: 52px;
+      display: grid;
+      grid-template-columns: auto minmax(320px, 1fr) auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 7px 16px;
+      background: rgba(252,253,253,.9);
+      border-bottom: 1px solid rgba(31,45,60,.07);
+      box-shadow: 0 8px 24px rgba(31,45,60,.055);
+      backdrop-filter: blur(20px) saturate(1.1);
+      -webkit-backdrop-filter: blur(20px) saturate(1.1);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 142px;
+      font-weight: 850;
+      letter-spacing: 0;
+      color: #122536;
+    }
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--accent);
+      font-weight: 900;
+    }
+    .brand small {
+      display: block;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+
+    .searchbar {
+      position: relative;
+      min-width: 220px;
+    }
+    .searchbar input {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border-radius: 8px;
+      border: 1px solid rgba(31,45,60,.09);
+      background: rgba(255,255,255,.92);
+      color: var(--ink);
+      outline: 0;
+    }
+    .searchbar span {
+      position: absolute;
+      left: 12px;
+      top: 9px;
+      color: #6c7b86;
+      font-size: 14px;
+    }
+
+    .segmented, .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .segmented {
+      padding: 3px;
+      border-radius: 8px;
+      background: rgba(238,242,244,.84);
+      border: 1px solid rgba(31,45,60,.07);
+    }
+    .segmented button, .toolbar button {
+      height: 32px;
+      border-radius: 7px;
+      padding: 0 10px;
+      background: transparent;
+      color: #435463;
+      font-size: 13px;
+      font-weight: 720;
+    }
+    .segmented button.active {
+      background: rgba(255,255,255,.96);
+      color: #102637;
+      box-shadow: 0 4px 12px rgba(31,45,60,.075);
+    }
+    .toolbar button {
+      min-width: 34px;
+      border: 1px solid rgba(31,45,60,.09);
+      background: rgba(255,255,255,.78);
+    }
+    .toolbar button.primary {
+      color: #fff;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .toolbar { position: relative; }
+    .toolbar button:active,
+    .segmented button:active,
+    .more-menu button:active { transform: translateY(1px); }
+    .more-menu {
+      position: absolute;
+      right: 0;
+      top: 40px;
+      z-index: 44;
+      display: none;
+      width: 210px;
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(31,45,60,.1);
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 16px 44px rgba(31,45,60,.16);
+      backdrop-filter: blur(18px) saturate(1.05);
+      -webkit-backdrop-filter: blur(18px) saturate(1.05);
+    }
+    .more-menu.show { display: grid; gap: 4px; }
+    .more-menu button {
+      width: 100%;
+      justify-content: flex-start;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      color: #2e3f4b;
+    }
+    .more-menu .danger {
+      color: #9a3e45;
+    }
+
+    .canvas-wrap {
+      position: absolute;
+      inset: 54px 0 0;
+      overflow: hidden;
+      cursor: default;
+    }
+    .canvas-wrap.dragging { cursor: grabbing; }
+    .scene {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1px;
+      height: 1px;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .world-lines, .relation-lines {
+      position: absolute;
+      left: -6000px;
+      top: -6000px;
+      width: 12000px;
+      height: 12000px;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .world-lines { z-index: 1; }
+    .relation-lines { z-index: 5; }
+    #cards { position: relative; z-index: 10; }
+    .year-line {
+      stroke: rgba(41,62,82,.08);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+    }
+    .year-text {
+      fill: rgba(62,78,92,.45);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .relation-line {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .relation-line.parent { stroke: rgba(31,111,122,.58); }
+    .relation-line.sibling { stroke: rgba(44,80,100,.38); }
+    .relation-line.friend { stroke: rgba(86,99,160,.45); stroke-dasharray: 7 9; }
+    .relation-line.main { stroke-width: 2.4; opacity: .86; }
+    .relation-line.muted { stroke-width: 1.35; opacity: .34; }
+    .relation-line.selected { stroke: var(--line-strong); stroke-width: 3.2; opacity: .96; }
+
+    .family-card {
+      --card-scale: 1;
+      position: absolute;
+      width: 292px;
+      min-height: 180px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(31,45,60,.1);
+      background: var(--far);
+      color: #162838;
+      box-shadow: var(--shadow);
+      transform: translate(-50%, -50%) scale(var(--card-scale));
+      transform-origin: center;
+      user-select: none;
+      transition: border-color .16s, box-shadow .16s, background .16s, opacity .16s;
+      backdrop-filter: blur(18px) saturate(1.05);
+      -webkit-backdrop-filter: blur(18px) saturate(1.05);
+    }
+    .family-card.single { width: 180px; min-height: 112px; }
+    .family-card.compact { width: 180px; min-height: 112px; padding: 10px; }
+    .family-card.tree { width: 180px; min-height: 112px; }
+    .family-card.focus-core {
+      background: var(--core);
+      border-color: rgba(31,111,122,.5);
+      box-shadow: 0 0 0 3px rgba(31,111,122,.1), 0 18px 46px rgba(25,61,72,.16);
+    }
+    .family-card.focus-near {
+      background: var(--near);
+      border-color: rgba(31,111,122,.16);
+      box-shadow: 0 14px 34px rgba(39,64,74,.1);
+    }
+    .family-card.focus-far { opacity: .55; }
+    .family-card.selected {
+      border-color: rgba(31,111,122,.84);
+      box-shadow: 0 0 0 4px rgba(31,111,122,.14), 0 18px 44px rgba(25,73,86,.18);
+    }
+    .family-card.dimmed { opacity: .22; }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 20px;
+      margin-bottom: 8px;
+    }
+    .relation-chip {
+      max-width: 124px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #285b63;
+      background: var(--accent-soft);
+      border: 1px solid rgba(31,111,122,.16);
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .reminder-strip {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .badge {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      border-radius: 5px;
+      font-size: 10px;
+      font-weight: 900;
+      background: rgba(255,255,255,.8);
+      border: 1px solid rgba(31,45,60,.08);
+    }
+
+    .couple-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+      gap: 8px;
+      align-items: stretch;
+    }
+    .family-card.single .couple-grid,
+    .family-card.tree .couple-grid,
+    .family-card.compact .couple-grid {
+      grid-template-columns: 1fr;
+    }
+    .person-pane {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 96px;
+      border-radius: 7px;
+      padding: 12px;
+      background: rgba(255,255,255,.7);
+      border: 1px solid rgba(31,45,60,.07);
+    }
+    .person-pane.primary { background: rgba(255,255,255,.86); }
+    .person-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #142535;
+      font-size: 16px;
+      line-height: 1.24;
+      font-weight: 880;
+    }
+    .person-year {
+      margin-top: 6px;
+      color: #657482;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .heart-link {
+      display: grid;
+      place-items: center;
+      min-height: 96px;
+      position: relative;
+      color: #a94d57;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .heart-link::before,
+    .heart-link::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 1px;
+      height: 34px;
+      background: rgba(169,77,87,.2);
+      transform: translateY(-50%);
+    }
+    .heart-link::before { top: 28px; }
+    .heart-link::after { top: 68px; }
+    .family-card.compact .card-top { margin-bottom: 6px; }
+    .family-card.compact .relation-chip { display: none; }
+    .family-card.compact .person-pane { min-height: 72px; padding: 9px; }
+    .family-card.compact .person-name { font-size: 15px; }
+    .family-card.compact .person-year { margin-top: 4px; font-size: 11px; }
+    .family-card.compact .heart-link { display: none; }
+
+    .bottom-status {
+      position: absolute;
+      z-index: 22;
+      left: 18px;
+      bottom: 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: #50606d;
+      background: rgba(255,255,255,.76);
+      border: 1px solid rgba(31,45,60,.08);
+      box-shadow: 0 10px 26px rgba(31,45,60,.09);
+      font-size: 12px;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .drawer {
+      position: absolute;
+      z-index: 32;
+      top: 66px;
+      right: 14px;
+      width: 360px;
+      max-width: calc(100vw - 28px);
+      bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(31,45,60,.1);
+      background: rgba(255,255,255,.88);
+      box-shadow: 0 18px 46px rgba(31,45,60,.16);
+      backdrop-filter: blur(22px) saturate(1.05);
+      -webkit-backdrop-filter: blur(22px) saturate(1.05);
+    }
+    .drawer.closed { display: none; }
+    .drawer-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .drawer h2 { margin: 0; font-size: 18px; color: #142535; }
+    .drawer p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 7px;
+      background: rgba(238,243,247,.9);
+      border: 1px solid rgba(31,45,60,.08);
+      font-weight: 850;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      padding: 3px;
+      border-radius: 8px;
+      background: rgba(236,241,245,.9);
+      border: 1px solid rgba(31,45,60,.07);
+      margin-bottom: 10px;
+    }
+    .tabs button {
+      height: 30px;
+      border-radius: 6px;
+      background: transparent;
+      color: #5d6b76;
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .tabs button.active { background: #fff; color: #122536; }
+    .drawer-scroll {
+      overflow: auto;
+      padding-right: 3px;
+    }
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .quick-actions button,
+    .primary-btn,
+    .secondary-btn,
+    .danger-btn {
+      min-height: 36px;
+      border-radius: 7px;
+      border: 1px solid rgba(31,45,60,.1);
+      background: rgba(248,250,252,.94);
+      color: #28485a;
+      font-size: 13px;
+      font-weight: 780;
+    }
+    .primary-btn { background: #2f7f9a; color: #fff; border-color: #2f7f9a; }
+    .danger-btn { color: #a3424d; }
+    .field-card {
+      border-radius: 8px;
+      border: 1px solid rgba(31,45,60,.08);
+      background: rgba(248,250,252,.8);
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .field-card h3 { margin: 0 0 8px; font-size: 13px; color: #21384a; }
+    .field-grid { display: grid; gap: 8px; }
+    .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field { display: grid; gap: 4px; }
+    .field label { color: #657482; font-size: 11px; font-weight: 780; }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      min-height: 34px;
+      border-radius: 7px;
+      border: 1px solid rgba(31,45,60,.1);
+      background: #fff;
+      color: #17212b;
+      outline: 0;
+      padding: 7px 9px;
+    }
+    .field textarea { min-height: 70px; resize: vertical; }
+    .panel-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .wide { grid-column: 1 / -1; }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 70;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(246,248,250,.62);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      width: min(580px, calc(100vw - 40px));
+      max-height: calc(100vh - 80px);
+      overflow: auto;
+      border-radius: 10px;
+      padding: 16px;
+      border: 1px solid rgba(31,45,60,.1);
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 18px 54px rgba(31,45,60,.18);
+    }
+    .modal h2 { margin: 0 0 6px; font-size: 20px; }
+    .modal p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    .toast {
+      position: absolute;
+      z-index: 90;
+      left: 50%;
+      top: 66px;
+      transform: translateX(-50%) translateY(-12px);
+      opacity: 0;
+      pointer-events: none;
+      min-width: 160px;
+      text-align: center;
+      padding: 10px 14px;
+      border-radius: 8px;
+      color: #173142;
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(31,45,60,.08);
+      box-shadow: 0 12px 28px rgba(31,45,60,.12);
+      transition: opacity .18s, transform .18s;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .cloud-state {
+      min-width: 70px;
+      color: #566672;
+      font-size: 12px;
+      font-weight: 750;
+      text-align: center;
+    }
+    .cloud-state[data-state="saved"] { color: var(--accent); }
+    .cloud-state[data-state="error"] { color: #9a3e45; }
+
+    .auth-gate {
+      position: fixed;
+      z-index: 120;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #f7f8f8;
+    }
+    .auth-gate.hidden { display: none; }
+    .auth-panel {
+      width: min(380px, 100%);
+      padding: 28px;
+      border: 1px solid rgba(31,45,60,.12);
+      border-radius: 8px;
+      background: rgba(255,255,255,.96);
+      box-shadow: 0 24px 70px rgba(25,39,50,.13);
+    }
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+      color: #122536;
+      font-size: 20px;
+      font-weight: 850;
+    }
+    .auth-panel h1 {
+      margin: 0 0 8px;
+      color: #142535;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    .auth-panel p {
+      margin: 0 0 20px;
+      color: #68737c;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .auth-panel label {
+      display: block;
+      margin-bottom: 7px;
+      color: #344652;
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .auth-panel input {
+      width: 100%;
+      height: 42px;
+      padding: 0 12px;
+      border: 1px solid rgba(31,45,60,.16);
+      border-radius: 6px;
+      background: #fff;
+      color: #142535;
+      outline: 0;
+    }
+    .auth-panel input:focus { border-color: rgba(31,111,122,.72); }
+    .auth-panel button {
+      width: 100%;
+      height: 42px;
+      margin-top: 12px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+    }
+    .auth-message {
+      min-height: 20px;
+      margin-top: 12px;
+      color: #62727e;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .auth-message.error { color: #9a3e45; }
+
+    @media (max-width: 980px) {
+      .topbar { grid-template-columns: 1fr; align-items: stretch; }
+      .segmented, .toolbar { overflow: auto; }
+      .canvas-wrap { top: 154px; }
+      .drawer { top: 154px; left: 10px; right: 10px; width: auto; height: 45vh; bottom: 10px; }
+      .bottom-status { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">谱</div>
+        <div>我家有谱<small>Taste V3</small></div>
+      </div>
+      <div class="searchbar">
+        <span>⌕</span>
+        <input id="topSearch" placeholder="搜索姓名、地区、提醒、关系" />
+      </div>
+      <div class="segmented" id="viewModes">
+        <button class="active" data-mode="timeline">时间轴</button>
+        <button data-mode="tree">家族树</button>
+        <button data-mode="network">关系网</button>
+      </div>
+      <div class="toolbar">
+        <button class="primary" id="addBtn">新增</button>
+        <button id="reminderBtn">提醒</button>
+        <button id="centerBtn">回到我</button>
+        <span class="cloud-state" id="cloudStatus" data-state="local">本机模式</span>
+        <button id="logoutBtn" hidden>退出</button>
+        <button id="moreBtn">更多</button>
+        <div class="more-menu" id="moreMenu">
+          <button id="filterBtn">筛选关系</button>
+          <button id="zoomOutBtn">缩小画布</button>
+          <button id="zoomInBtn">放大画布</button>
+          <button id="exportBtn">导出数据</button>
+          <button id="importBtn">导入数据</button>
+          <button class="danger" id="resetBtn">恢复示例</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="canvas-wrap" id="canvas">
+      <div class="scene" id="scene">
+        <svg class="world-lines" id="worldLines" viewBox="-6000 -6000 12000 12000"></svg>
+        <svg class="relation-lines" id="relationLines" viewBox="-6000 -6000 12000 12000"></svg>
+        <div id="cards"></div>
+      </div>
+    </section>
+
+    <aside class="drawer closed" id="detailDrawer">
+      <div class="drawer-head">
+        <div>
+          <h2 id="drawerTitle">人物详情</h2>
+          <p id="drawerSummary">点击卡片查看完整资料</p>
+        </div>
+        <div>
+          <button class="icon-btn" id="editBtn" title="编辑">✎</button>
+          <button class="icon-btn" id="closeDrawerBtn" title="关闭">×</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="active" data-tab="base">资料</button>
+        <button data-tab="path">关系</button>
+        <button data-tab="events">提醒</button>
+        <button data-tab="notes">备注</button>
+      </div>
+      <div class="drawer-scroll" id="detailContent"></div>
+    </aside>
+
+    <div class="bottom-status" id="statusBar"></div>
+
+    <div class="modal-backdrop" id="modalBackdrop">
+      <section class="modal">
+        <h2 id="modalTitle"></h2>
+        <p id="modalHint"></p>
+        <div id="modalBody"></div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <input id="fileInput" type="file" accept="application/json" style="display:none" />
+  </main>
+
+  <section class="auth-gate hidden" id="authGate" aria-labelledby="authTitle">
+    <form class="auth-panel" id="authForm">
+      <div class="auth-brand"><span class="brand-mark">谱</span><span>我家有谱</span></div>
+      <h1 id="authTitle">登录家族空间</h1>
+      <p>人物资料和关系数据默认仅对已授权家族成员开放。输入邮箱后，我们会发送安全登录链接。</p>
+      <label for="authEmail">邮箱</label>
+      <input id="authEmail" type="email" autocomplete="email" required placeholder="name@example.com" />
+      <button id="signInBtn" type="submit">发送登录链接</button>
+      <div class="auth-message" id="authMessage" role="status"></div>
+    </form>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="vendor/supabase-2.109.0.js"></script>
+  <script type="module">
+    import { FamilyCloudStore, hasCloudConfig } from "./cloud-store.js";
+
+    const DB_NAME = "wojiayoupu_family_graph";
+    const DB_VERSION = 1;
+    const STORE_NAMES = ["cards", "links", "events", "meta", "auditLogs"];
+    const baseYear = 1990;
+    const yearScale = 7;
+    const cardW = 292;
+    const cardH = 180;
+
+    const defaultPerson = (idx = 0) => ({
+      name: "未命名",
+      gender: idx === 0 ? "male" : "female",
+      age: 0,
+      province: "浙江省",
+      city: "杭州市",
+      county: "余杭区",
+      detailAddress: "",
+      workType: "",
+      position: "",
+      phone: "",
+      notes: "",
+      birthYear: 1990
+    });
+
+    const sampleData = {
+      centerId: "home-center",
+      selectedId: "home-center",
+      viewMode: "timeline",
+      filters: { parent: true, sibling: true, friend: true },
+      cards: [
+        {
+          id: "home-center",
+          kind: "couple",
+          title: "林知远 · 周婉清",
+          relationLabel: "我",
+          reminders: ["birth", "anniv", "lamp"],
+          persons: [
+            { ...defaultPerson(0), name: "林知远", gender: "male", age: 34, birthYear: 1992, detailAddress: "浙江省杭州市余杭区云溪社区", workType: "互联网", position: "产品经理", phone: "138****4321", notes: "当前中心人物。" },
+            { ...defaultPerson(1), name: "周婉清", gender: "female", age: 32, birthYear: 1994, detailAddress: "浙江省杭州市余杭区云溪社区", workType: "教育", position: "教师", phone: "139****8754", notes: "配偶。" }
+          ]
+        },
+        {
+          id: "parent-lin",
+          kind: "couple",
+          title: "林建国 · 何月珍",
+          relationLabel: "父母",
+          reminders: ["memorial"],
+          persons: [
+            { ...defaultPerson(0), name: "林建国", gender: "male", age: 62, birthYear: 1964, detailAddress: "浙江省杭州市余杭区良渚街道" },
+            { ...defaultPerson(1), name: "何月珍", gender: "female", age: 60, birthYear: 1966, detailAddress: "浙江省杭州市余杭区良渚街道" }
+          ]
+        },
+        {
+          id: "child-a",
+          kind: "single",
+          title: "林晨",
+          relationLabel: "子女",
+          reminders: ["birth"],
+          persons: [{ ...defaultPerson(0), name: "林晨", gender: "male", age: 8, birthYear: 2018, notes: "下一代独立卡片。" }]
+        },
+        {
+          id: "child-b",
+          kind: "single",
+          title: "林悦",
+          relationLabel: "子女",
+          reminders: [],
+          persons: [{ ...defaultPerson(1), name: "林悦", gender: "female", age: 5, birthYear: 2021, notes: "关系网络中展示；家族树主干默认隐藏。" }]
+        },
+        {
+          id: "sibling-home",
+          kind: "couple",
+          title: "林知行 · 陈若",
+          relationLabel: "兄弟姐妹",
+          reminders: ["birth"],
+          persons: [
+            { ...defaultPerson(0), name: "林知行", gender: "male", age: 37, birthYear: 1989, detailAddress: "浙江省杭州市余杭区仓前街道" },
+            { ...defaultPerson(1), name: "陈若", gender: "female", age: 35, birthYear: 1991, detailAddress: "浙江省宁波市鄞州区明楼街道" }
+          ]
+        },
+        {
+          id: "spouse-family",
+          kind: "couple",
+          title: "周启明 · 许静",
+          relationLabel: "姻亲",
+          reminders: ["anniv"],
+          persons: [
+            { ...defaultPerson(0), name: "周启明", gender: "male", age: 61, birthYear: 1965, province: "江苏省", city: "苏州市", county: "吴中区" },
+            { ...defaultPerson(1), name: "许静", gender: "female", age: 59, birthYear: 1967, province: "江苏省", city: "苏州市", county: "吴中区" }
+          ]
+        },
+        {
+          id: "friend-home",
+          kind: "single",
+          title: "顾明远",
+          relationLabel: "好友",
+          reminders: [],
+          persons: [{ ...defaultPerson(0), name: "顾明远", gender: "male", age: 34, birthYear: 1992, county: "西湖区", notes: "重要好友关系。" }]
+        }
+      ],
+      links: [
+        { id: "l1", from: "parent-lin", to: "home-center", type: "parent" },
+        { id: "l2", from: "home-center", to: "child-a", type: "parent" },
+        { id: "l3", from: "home-center", to: "child-b", type: "parent" },
+        { id: "l4", from: "home-center", to: "sibling-home", type: "sibling" },
+        { id: "l5", from: "home-center", to: "spouse-family", type: "sibling" },
+        { id: "l6", from: "home-center", to: "friend-home", type: "friend" }
+      ]
+    };
+
+    let state = structuredClone(sampleData);
+    let db = null;
+    let saveTimer = null;
+    let cloudStore = null;
+    let currentTreeId = null;
+    let currentSession = null;
+    let authLoadInProgress = false;
+    let suspendPersistence = true;
+    let lastPersistedSignature = "";
+    let activeTab = "base";
+    let detailsOpen = false;
+    let dragging = false;
+    let panHoldTimer = null;
+    let dragStart = null;
+    let view = { x: window.innerWidth / 2, y: window.innerHeight / 2 + 30, scale: 1 };
+
+    const el = {
+      canvas: document.getElementById("canvas"),
+      scene: document.getElementById("scene"),
+      worldLines: document.getElementById("worldLines"),
+      relationLines: document.getElementById("relationLines"),
+      cards: document.getElementById("cards"),
+      topSearch: document.getElementById("topSearch"),
+      moreMenu: document.getElementById("moreMenu"),
+      detailDrawer: document.getElementById("detailDrawer"),
+      drawerTitle: document.getElementById("drawerTitle"),
+      drawerSummary: document.getElementById("drawerSummary"),
+      detailContent: document.getElementById("detailContent"),
+      statusBar: document.getElementById("statusBar"),
+      modalBackdrop: document.getElementById("modalBackdrop"),
+      modalTitle: document.getElementById("modalTitle"),
+      modalHint: document.getElementById("modalHint"),
+      modalBody: document.getElementById("modalBody"),
+      toast: document.getElementById("toast"),
+      fileInput: document.getElementById("fileInput"),
+      cloudStatus: document.getElementById("cloudStatus"),
+      logoutBtn: document.getElementById("logoutBtn"),
+      authGate: document.getElementById("authGate"),
+      authForm: document.getElementById("authForm"),
+      authEmail: document.getElementById("authEmail"),
+      authMessage: document.getElementById("authMessage"),
+      signInBtn: document.getElementById("signInBtn")
+    };
+
+    function uid(prefix) {
+      return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = () => {
+          const database = request.result;
+          for (const name of STORE_NAMES) {
+            if (!database.objectStoreNames.contains(name)) {
+              database.createObjectStore(name, { keyPath: "id" });
+            }
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function transaction(storeNames, mode = "readonly") {
+      return db.transaction(storeNames, mode);
+    }
+
+    function getAll(storeName) {
+      return new Promise((resolve, reject) => {
+        const request = transaction([storeName]).objectStore(storeName).getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function clearAndPut(storeName, records) {
+      return new Promise((resolve, reject) => {
+        const store = transaction([storeName], "readwrite").objectStore(storeName);
+        const clear = store.clear();
+        clear.onerror = () => reject(clear.error);
+        clear.onsuccess = () => {
+          for (const record of records) store.put(record);
+          store.transaction.oncomplete = resolve;
+          store.transaction.onerror = () => reject(store.transaction.error);
+        };
+      });
+    }
+
+    async function readLocalSnapshot() {
+      const [cards, links, metaRows] = await Promise.all([getAll("cards"), getAll("links"), getAll("meta")]);
+      if (cards.length && links.length) {
+        const meta = metaRows.find(row => row.id === "app") || {};
+        return {
+          ...structuredClone(sampleData),
+          cards: cards.map(normalizeCard),
+          links,
+          centerId: meta.centerId || cards[0].id,
+          selectedId: meta.selectedId || meta.centerId || cards[0].id,
+          viewMode: meta.viewMode || "timeline",
+          filters: meta.filters || { parent: true, sibling: true, friend: true }
+        };
+      }
+      return null;
+    }
+
+    function blankFamilyState() {
+      const cardId = uid("card");
+      return {
+        centerId: cardId,
+        selectedId: cardId,
+        viewMode: "timeline",
+        filters: { parent: true, sibling: true, friend: true },
+        cards: [{
+          id: cardId,
+          kind: "single",
+          title: "未命名",
+          relationLabel: "我",
+          reminders: [],
+          persons: [{ ...defaultPerson(0), id: `${cardId}:0` }],
+          x: 0,
+          y: 0
+        }],
+        links: []
+      };
+    }
+
+    function stateSignature() {
+      return JSON.stringify({
+        centerId: state.centerId,
+        selectedId: state.selectedId,
+        viewMode: state.viewMode,
+        filters: state.filters,
+        cards: state.cards,
+        links: state.links
+      });
+    }
+
+    function setCloudStatus(status, label) {
+      el.cloudStatus.dataset.state = status;
+      el.cloudStatus.textContent = label;
+    }
+
+    function showAuthGate(message = "", isError = false) {
+      el.authGate.classList.remove("hidden");
+      el.authMessage.textContent = message;
+      el.authMessage.classList.toggle("error", isError);
+      el.logoutBtn.hidden = true;
+      el.cards.innerHTML = "";
+      el.relationLines.innerHTML = "";
+      el.worldLines.innerHTML = "";
+    }
+
+    function hideAuthGate() {
+      el.authGate.classList.add("hidden");
+      el.authMessage.textContent = "";
+      el.authMessage.classList.remove("error");
+      el.logoutBtn.hidden = !cloudStore;
+    }
+
+    function applyRequestedMode() {
+      const requestedMode = new URLSearchParams(location.search).get("mode");
+      if (["timeline", "tree", "network"].includes(requestedMode)) state.viewMode = requestedMode;
+      setMode(state.viewMode || "timeline", false);
+    }
+
+    async function persistLocalSnapshot() {
+      if (!db) return;
+      await Promise.all([
+        clearAndPut("cards", state.cards.map(card => ({ ...card }))),
+        clearAndPut("links", state.links.map(link => ({ ...link }))),
+        clearAndPut("meta", [{
+          id: "app",
+          centerId: state.centerId,
+          selectedId: state.selectedId,
+          viewMode: state.viewMode,
+          filters: state.filters,
+          treeId: currentTreeId,
+          cachedAt: new Date().toISOString()
+        }])
+      ]);
+    }
+
+    async function clearLocalPrivateCache() {
+      if (!db) return;
+      await Promise.all([
+        clearAndPut("cards", []),
+        clearAndPut("links", []),
+        clearAndPut("events", []),
+        clearAndPut("meta", []),
+        clearAndPut("auditLogs", [])
+      ]);
+      lastPersistedSignature = "";
+    }
+
+    async function initializeLocalMode() {
+      state = (await readLocalSnapshot()) || structuredClone(sampleData);
+      state.cards = state.cards.map(normalizeCard);
+      applyRequestedMode();
+      render();
+      centerOnSelected(false);
+      suspendPersistence = false;
+      lastPersistedSignature = stateSignature();
+      await persistLocalSnapshot();
+      hideAuthGate();
+      setCloudStatus("local", "本机模式");
+      toast("本机数据库已连接");
+    }
+
+    async function loadAuthenticatedFamily() {
+      if (!cloudStore || !currentSession || authLoadInProgress) return;
+      authLoadInProgress = true;
+      suspendPersistence = true;
+      hideAuthGate();
+      setCloudStatus("loading", "同步中");
+      try {
+        let tree = await cloudStore.firstAccessibleTree();
+        if (!tree) {
+          currentTreeId = await cloudStore.createFamilyTree("我的家族");
+          state = blankFamilyState();
+          await cloudStore.saveState(state, currentTreeId);
+        } else {
+          currentTreeId = tree.id;
+          state = await cloudStore.loadState(currentTreeId);
+          if (!state.cards.length) state = blankFamilyState();
+        }
+        state.cards = state.cards.map(normalizeCard);
+        applyRequestedMode();
+        render();
+        centerOnSelected(false);
+        await persistLocalSnapshot();
+        lastPersistedSignature = stateSignature();
+        setCloudStatus("saved", "云端已同步");
+        el.logoutBtn.hidden = false;
+      } catch (error) {
+        console.error(error);
+        setCloudStatus("error", "同步失败");
+        showAuthGate(`云端数据加载失败：${error.message || "请稍后重试"}`, true);
+      } finally {
+        suspendPersistence = false;
+        authLoadInProgress = false;
+      }
+    }
+
+    async function handleAuthSession(session) {
+      currentSession = session;
+      if (!session) {
+        currentTreeId = null;
+        suspendPersistence = true;
+        setCloudStatus("locked", "未登录");
+        showAuthGate();
+        return;
+      }
+      await loadAuthenticatedFamily();
+    }
+
+    async function initializeCloudMode(config) {
+      if (!window.supabase?.createClient) throw new Error("Supabase 客户端加载失败");
+      const client = window.supabase.createClient(config.url, config.publishableKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+      cloudStore = new FamilyCloudStore({
+        client,
+        onStatus(status) {
+          const labels = { loading: "同步中", saving: "保存中", saved: "云端已同步", error: "同步失败" };
+          setCloudStatus(status, labels[status] || "云端");
+        }
+      });
+      cloudStore.onAuthStateChange(session => {
+        queueMicrotask(() => handleAuthSession(session).catch(error => {
+          console.error(error);
+          setCloudStatus("error", "认证失败");
+          showAuthGate("登录状态处理失败，请刷新后重试。", true);
+        }));
+      });
+      currentSession = await cloudStore.getSession();
+      if (currentSession) await loadAuthenticatedFamily();
+      else {
+        setCloudStatus("locked", "未登录");
+        showAuthGate();
+      }
+    }
+
+    async function initDatabase() {
+      db = await openDatabase();
+      const config = window.WOJIAYOUPU_CONFIG || { production: false, supabase: {} };
+      if (hasCloudConfig(config.supabase)) {
+        await initializeCloudMode(config.supabase);
+        return;
+      }
+      if (config.production) {
+        setCloudStatus("error", "配置缺失");
+        showAuthGate("生产环境尚未配置云端数据库，请联系管理员。", true);
+        return;
+      }
+      await initializeLocalMode();
+    }
+
+    async function persistNow(force = false) {
+      if (suspendPersistence || !db) return;
+      const signature = stateSignature();
+      if (!force && signature === lastPersistedSignature) return;
+      await persistLocalSnapshot();
+      if (cloudStore && currentTreeId && currentSession) {
+        await cloudStore.saveState(state, currentTreeId);
+      }
+      lastPersistedSignature = signature;
+    }
+
+    function save() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => persistNow().catch(error => {
+        console.error(error);
+        setCloudStatus("error", "保存失败");
+        toast("云端保存失败，本机缓存仍保留");
+      }), cloudStore ? 650 : 240);
+    }
+
+    function normalizeCard(card) {
+      const persons = (card.persons || [defaultPerson(0)]).map((p, idx) => ({
+        ...defaultPerson(idx),
+        ...p,
+        gender: p.gender || (idx === 0 ? "male" : "female"),
+        birthYear: Number(p.birthYear || baseYear),
+        age: Number(p.age || 0)
+      }));
+      return {
+        ...card,
+        kind: card.kind || (persons.length > 1 ? "couple" : "single"),
+        title: card.title || persons.map(p => p.name).join(" · "),
+        relationLabel: card.relationLabel || "",
+        reminders: card.reminders || [],
+        x: Number(card.x || 0),
+        y: Number(card.y || 0),
+        persons
+      };
+    }
+
+    function selectedCard() {
+      return state.cards.find(card => card.id === state.selectedId) || state.cards[0];
+    }
+
+    function centerCard() {
+      return state.cards.find(card => card.id === state.centerId) || selectedCard();
+    }
+
+    function primaryMale(card) {
+      return card.persons.find(p => p.gender === "male") || card.persons[0] || defaultPerson(0);
+    }
+
+    function visiblePersons(card) {
+      if (state.viewMode === "tree") return [primaryMale(card)];
+      if (isCompactView()) return [primaryMale(card)];
+      return card.kind === "couple" ? card.persons.slice(0, 2) : card.persons.slice(0, 1);
+    }
+
+    function isMaleVisible(card) {
+      if (state.viewMode !== "tree") return true;
+      return Boolean(card.persons.some(p => p.gender === "male")) && isTreeMainline(card);
+    }
+
+    function isTreeMainline(card) {
+      if (state.viewMode !== "tree") return true;
+      const ids = new Set([state.centerId]);
+      let changed = true;
+      let guard = 0;
+      while (changed && guard++ < 40) {
+        changed = false;
+        for (const link of state.links) {
+          if (link.type !== "parent") continue;
+          if (ids.has(link.from) && !ids.has(link.to)) { ids.add(link.to); changed = true; }
+          if (ids.has(link.to) && !ids.has(link.from)) { ids.add(link.from); changed = true; }
+        }
+      }
+      return ids.has(card.id);
+    }
+
+    function cardMainYear(card) {
+      const years = visiblePersons(card).map(p => Number(p.birthYear)).filter(Boolean);
+      if (!years.length) return baseYear;
+      return Math.round(years.reduce((sum, item) => sum + item, 0) / years.length);
+    }
+
+    function relationPath(card) {
+      if (card.id === state.centerId) return "中心人物";
+      const link = state.links.find(l => (l.from === state.centerId && l.to === card.id) || (l.to === state.centerId && l.from === card.id));
+      if (!link) return "间接关系";
+      return { parent: "父母 / 子女", sibling: "同代 / 姻亲", friend: "好友" }[link.type] || "关系";
+    }
+
+    function computeGenerations() {
+      const byId = Object.fromEntries(state.cards.map(card => [card.id, card]));
+      const gen = new Map([[state.centerId, 0]]);
+      let changed = true;
+      let guard = 0;
+      while (changed && guard++ < 40) {
+        changed = false;
+        for (const link of state.links) {
+          if (!byId[link.from] || !byId[link.to]) continue;
+          const gf = gen.get(link.from);
+          const gt = gen.get(link.to);
+          if (link.type === "parent") {
+            if (gt !== undefined && gf === undefined) { gen.set(link.from, gt - 1); changed = true; }
+            if (gf !== undefined && gt === undefined) { gen.set(link.to, gf + 1); changed = true; }
+          } else {
+            if (gf !== undefined && gt === undefined) { gen.set(link.to, gf); changed = true; }
+            if (gt !== undefined && gf === undefined) { gen.set(link.from, gt); changed = true; }
+          }
+        }
+      }
+      for (const card of state.cards) if (!gen.has(card.id)) gen.set(card.id, 0);
+      return gen;
+    }
+
+    function focusLevel(card, gen) {
+      if (card.id === state.centerId) return "core";
+      const direct = state.links.some(link => (link.from === state.centerId && link.to === card.id) || (link.to === state.centerId && link.from === card.id));
+      if (direct && Math.abs(gen.get(card.id) || 0) <= 1) return "near";
+      if (state.viewMode === "tree" && Math.abs(gen.get(card.id) || 0) <= 2) return "near";
+      return "far";
+    }
+
+    function ordered(cards) {
+      return [...cards].sort((a, b) => cardMainYear(a) - cardMainYear(b) || (primaryMale(a).name || "").localeCompare(primaryMale(b).name || "", "zh-Hans-CN"));
+    }
+
+    function spread(cards, centerX, gap) {
+      const list = ordered(cards);
+      const mid = (list.length - 1) / 2;
+      list.forEach((card, idx) => card.x = centerX + (idx - mid) * gap);
+    }
+
+    function enforceSpacing(cards, minGap = 244, anchorId = null) {
+      if (cards.length < 2) return;
+      const row = [...cards].sort((a, b) => a.x - b.x);
+      const anchor = anchorId ? row.find(card => card.id === anchorId) : null;
+      if (anchor) {
+        anchor.x = 0;
+        const idx = row.indexOf(anchor);
+        for (let i = idx - 1; i >= 0; i--) row[i].x = Math.min(row[i].x, row[i + 1].x - minGap);
+        for (let i = idx + 1; i < row.length; i++) row[i].x = Math.max(row[i].x, row[i - 1].x + minGap);
+      } else {
+        for (let i = 1; i < row.length; i++) {
+          if (row[i].x - row[i - 1].x < minGap) row[i].x = row[i - 1].x + minGap;
+        }
+        const middle = (row[0].x + row[row.length - 1].x) / 2;
+        row.forEach(card => card.x -= middle);
+      }
+    }
+
+    function applyAutoLayout() {
+      const gen = computeGenerations();
+      const visible = state.cards.filter(isMaleVisible);
+      const rows = new Map();
+      const generationGap = state.viewMode === "tree" ? 238 : 258;
+      const horizontalGap = state.viewMode === "tree" ? 238 : 338;
+      const minGap = state.viewMode === "tree" ? 226 : 330;
+      for (const card of visible) {
+        const g = gen.get(card.id) || 0;
+        card.y = g * generationGap;
+        if (!rows.has(g)) rows.set(g, []);
+        rows.get(g).push(card);
+      }
+      for (const [g, cards] of rows.entries()) {
+        if (g === 0) {
+          const center = cards.find(card => card.id === state.centerId);
+          if (center) center.x = 0;
+          const siblings = [];
+          const friends = [];
+          const others = [];
+          for (const card of ordered(cards.filter(c => c.id !== state.centerId))) {
+            const link = state.links.find(l => (l.from === state.centerId && l.to === card.id) || (l.to === state.centerId && l.from === card.id));
+            if (link?.type === "friend") friends.push(card);
+            else if (link?.type === "sibling") siblings.push(card);
+            else others.push(card);
+          }
+          siblings.forEach((card, idx) => card.x = (idx % 2 === 0 ? -1 : 1) * (Math.floor(idx / 2) + 1) * horizontalGap);
+          friends.forEach((card, idx) => card.x = (idx + 2) * horizontalGap);
+          others.forEach((card, idx) => card.x = -(idx + 2) * horizontalGap);
+          enforceSpacing(cards, minGap, state.centerId);
+        } else if (g > 0) {
+          layoutChildRows(gen, g, cards, horizontalGap, minGap);
+        } else {
+          spread(cards, 0, horizontalGap);
+          enforceSpacing(cards, minGap);
+        }
+      }
+      return gen;
+    }
+
+    function layoutChildRows(gen, generation, row, gap, minGap) {
+      const byId = Object.fromEntries(state.cards.map(card => [card.id, card]));
+      const placed = new Set();
+      const groups = new Map();
+      for (const link of state.links) {
+        if (link.type !== "parent" || gen.get(link.to) !== generation || gen.get(link.from) !== generation - 1) continue;
+        if (!isMaleVisible(byId[link.to])) continue;
+        if (!groups.has(link.from)) groups.set(link.from, []);
+        groups.get(link.from).push(byId[link.to]);
+      }
+      for (const parentId of [...groups.keys()].sort((a, b) => (byId[a]?.x || 0) - (byId[b]?.x || 0))) {
+        const parent = byId[parentId];
+        const children = ordered(groups.get(parentId));
+        const mid = (children.length - 1) / 2;
+        children.forEach((card, idx) => {
+          card.x = (parent?.x || 0) + (idx - mid) * gap;
+          placed.add(card.id);
+        });
+      }
+      const loose = row.filter(card => !placed.has(card.id));
+      if (loose.length) spread(loose, 0, gap);
+      enforceSpacing(row, minGap);
+    }
+
+    function render() {
+      const gen = applyAutoLayout();
+      renderScene();
+      renderWorldLines();
+      renderRelations(gen);
+      renderCards(gen);
+      renderDetails();
+      renderStatus(gen);
+      save();
+    }
+
+    function renderScene() {
+      el.scene.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    }
+
+    function renderWorldLines() {
+      let out = "";
+      const start = state.viewMode === "tree" ? -720 : -1100;
+      const end = state.viewMode === "tree" ? 900 : 1200;
+      for (let y = start; y <= end; y += 84) {
+        out += `<line class="year-line" x1="-5600" y1="${y}" x2="5600" y2="${y}" />`;
+      }
+      for (const year of [1880, 1910, 1940, 1970, 2000, 2030]) {
+        const y = (year - baseYear) * yearScale;
+        out += `<text class="year-text" x="-520" y="${y - 8}">${year}</text>`;
+        out += `<line class="year-line" x1="-5600" y1="${y}" x2="5600" y2="${y}" stroke-width="1.4" />`;
+      }
+      el.worldLines.innerHTML = out;
+    }
+
+    function visibleLinks(gen) {
+      return state.links.filter(link => {
+        if ((state.filters || {})[link.type] === false) return false;
+        if (state.viewMode === "tree" && link.type !== "parent") return false;
+        if (state.viewMode !== "network" && link.type !== "parent") {
+          const selected = state.selectedId;
+          if (!selected || selected === state.centerId || (link.from !== selected && link.to !== selected)) return false;
+        }
+        const from = state.cards.find(card => card.id === link.from);
+        const to = state.cards.find(card => card.id === link.to);
+        if (!from || !to) return false;
+        return isMaleVisible(from) && isMaleVisible(to);
+      });
+    }
+
+    function connectorBounds(card) {
+      const compact = isCompactView();
+      const tree = state.viewMode === "tree";
+      const single = card.kind === "single" || compact || tree;
+      const width = (single ? 180 : 292) / view.scale;
+      const height = (single ? 112 : 180) / view.scale;
+      return {
+        x: card.x,
+        y: card.y,
+        left: card.x - width / 2,
+        right: card.x + width / 2,
+        top: card.y - height / 2,
+        bottom: card.y + height / 2,
+        width,
+        height
+      };
+    }
+
+    function parentConnectorPath(parent, child) {
+      const a = connectorBounds(parent);
+      const b = connectorBounds(child);
+      const downward = b.y >= a.y;
+      const sx = a.x;
+      const sy = downward ? a.bottom : a.top;
+      const tx = b.x;
+      const ty = downward ? b.top : b.bottom;
+      const distance = Math.abs(ty - sy);
+      const offset = Math.max(22 / view.scale, Math.min(58 / view.scale, distance * .42));
+      const busY = downward ? sy + offset : sy - offset;
+      return `M ${sx} ${sy} L ${sx} ${busY} L ${tx} ${busY} L ${tx} ${ty}`;
+    }
+
+    function lateralConnectorPath(source, target, type) {
+      const a = connectorBounds(source);
+      const b = connectorBounds(target);
+      const dir = target.x >= source.x ? 1 : -1;
+      const sx = dir > 0 ? a.right : a.left;
+      const tx = dir > 0 ? b.left : b.right;
+      const sy = a.y;
+      const ty = b.y;
+      const lift = (type === "friend" ? 44 : 26) / view.scale;
+      const laneY = Math.min(a.top, b.top) - lift;
+      return `M ${sx} ${sy} L ${sx} ${laneY} L ${tx} ${laneY} L ${tx} ${ty}`;
+    }
+
+    function renderRelations(gen) {
+      const byId = Object.fromEntries(state.cards.map(card => [card.id, card]));
+      let out = "";
+      for (const link of visibleLinks(gen)) {
+        const a = byId[link.from];
+        const b = byId[link.to];
+        if (!a || !b) continue;
+        const d = link.type === "parent"
+          ? parentConnectorPath(a, b)
+          : lateralConnectorPath(a, b, link.type);
+        const touchesSelected = state.selectedId !== state.centerId && (link.from === state.selectedId || link.to === state.selectedId);
+        const mainline = link.type === "parent" && (link.from === state.centerId || link.to === state.centerId);
+        const stateClass = touchesSelected ? " selected" : mainline ? " main" : " muted";
+        out += `<path class="relation-line ${link.type}${stateClass}" d="${d}" />`;
+      }
+      el.relationLines.innerHTML = out;
+    }
+
+    function isCompactView() {
+      return view.scale < .78 || state.viewMode === "tree";
+    }
+
+    function reminderBadge(type) {
+      const map = { birth: ["生", "生日"], anniv: ["婚", "结婚纪念日"], memorial: ["忌", "忌日"], lamp: ["灯", "长明灯"] };
+      const item = map[type] || ["提", "提醒"];
+      return `<span class="badge" title="${item[1]}">${item[0]}</span>`;
+    }
+
+    function renderCards(gen) {
+      const visible = state.cards.filter(isMaleVisible);
+      const query = el.topSearch.value.trim().toLowerCase();
+      el.cards.innerHTML = visible.map(card => renderFamilyCard(card, gen, query)).join("");
+      el.cards.querySelectorAll(".family-card").forEach(cardEl => {
+        cardEl.addEventListener("pointerdown", e => e.stopPropagation());
+        cardEl.addEventListener("click", () => {
+          state.selectedId = cardEl.dataset.id;
+          detailsOpen = true;
+          render();
+        });
+      });
+    }
+
+    function renderFamilyCard(card, gen, query) {
+      const compact = isCompactView();
+      const tree = state.viewMode === "tree";
+      const persons = visiblePersons(card);
+      const primary = primaryMale(card);
+      const level = focusLevel(card, gen);
+      const matched = !query || JSON.stringify(card).toLowerCase().includes(query);
+      const classes = [
+        "family-card",
+        persons.length === 1 ? "single" : "",
+        compact ? "compact" : "",
+        tree ? "tree" : "",
+        `focus-${level}`,
+        card.id === state.selectedId ? "selected" : "",
+        matched ? "" : "dimmed"
+      ].filter(Boolean).join(" ");
+      const relation = card.id === state.centerId ? "我" : (card.relationLabel || relationPath(card));
+      const reminders = (card.reminders || []).slice(0, 3).map(reminderBadge).join("");
+      const cardScale = Math.max(.55, Math.min(1.8, 1 / view.scale)).toFixed(3);
+      let body = "";
+      if (persons.length > 1) {
+        body = `
+          <div class="couple-grid">
+            ${personPane(persons[0], persons[0] === primary)}
+            <div class="heart-link">♥</div>
+            ${personPane(persons[1], persons[1] === primary)}
+          </div>
+        `;
+      } else {
+        body = `<div class="couple-grid">${personPane(persons[0] || primary, true)}</div>`;
+      }
+      return `
+        <article class="${classes}" data-id="${card.id}" style="left:${card.x}px;top:${card.y}px;--card-scale:${cardScale}">
+          <div class="card-top">
+            <span class="relation-chip">${escapeHtml(relation)}</span>
+            <span class="reminder-strip">${reminders}</span>
+          </div>
+          ${body}
+        </article>
+      `;
+    }
+
+    function personPane(person, primary) {
+      return `
+        <div class="person-pane${primary ? " primary" : ""}">
+          <div class="person-name">${escapeHtml(person.name || "未命名")}</div>
+          <div class="person-year">${Number(person.birthYear || baseYear)}</div>
+        </div>
+      `;
+    }
+
+    function renderDetails() {
+      const card = selectedCard();
+      el.detailDrawer.classList.toggle("closed", !detailsOpen || !card);
+      if (!detailsOpen || !card) return;
+      el.drawerTitle.textContent = primaryMale(card).name || card.title;
+      el.drawerSummary.textContent = `${relationPath(card)} · ${card.persons.length} 人`;
+      const actions = `
+        <div class="quick-actions">
+          <button data-add="parent">+ 父母</button>
+          <button data-add="child">+ 子女</button>
+          <button data-add="sibling">+ 同代</button>
+          <button data-add="friend">+ 好友</button>
+          ${card.kind === "single" ? `<button data-add="spouse">+ 配偶</button>` : ""}
+        </div>
+      `;
+      if (activeTab === "base") {
+        el.detailContent.innerHTML = actions + card.persons.map(person => `
+          <div class="field-card">
+            <h3>${escapeHtml(person.name)}</h3>
+            <div class="field-grid">
+              <div class="two-cols">
+                <div class="field"><label>出生年</label><input readonly value="${Number(person.birthYear || baseYear)}"></div>
+                <div class="field"><label>性别</label><input readonly value="${person.gender === "male" ? "男" : "女"}"></div>
+              </div>
+              <div class="field"><label>居住地</label><input readonly value="${escapeHtml([person.province, person.city, person.county].filter(Boolean).join(""))}"></div>
+              <div class="two-cols">
+                <div class="field"><label>工作类型</label><input readonly value="${escapeHtml(person.workType || "未填写")}"></div>
+                <div class="field"><label>职位</label><input readonly value="${escapeHtml(person.position || "未填写")}"></div>
+              </div>
+            </div>
+          </div>
+        `).join("");
+      } else if (activeTab === "path") {
+        el.detailContent.innerHTML = actions + `
+          <div class="field-card">
+            <h3>关系路径</h3>
+            <p>${escapeHtml(card.title || primaryMale(card).name)} 与中心人物的关系为：${escapeHtml(relationPath(card))}。</p>
+            <p>家族树模式默认只显示男性主干；完整人员资料保留在此处。</p>
+          </div>
+        `;
+      } else if (activeTab === "events") {
+        const names = { birth: "生日", anniv: "结婚纪念日", memorial: "忌日", lamp: "长明灯" };
+        el.detailContent.innerHTML = actions + `
+          <div class="field-card">
+            <h3>重要提醒</h3>
+            ${(card.reminders || []).length ? card.reminders.map(r => `<p>${names[r] || r}</p>`).join("") : "<p>暂无提醒。</p>"}
+          </div>
+        `;
+      } else {
+        el.detailContent.innerHTML = actions + card.persons.map(person => `
+          <div class="field-card">
+            <h3>${escapeHtml(person.name)}</h3>
+            <p>${escapeHtml(person.notes || "暂无备注")}</p>
+            <p>${escapeHtml(person.detailAddress || "未填写详细住址")}</p>
+          </div>
+        `).join("");
+      }
+      el.detailContent.querySelectorAll("[data-add]").forEach(button => {
+        button.addEventListener("click", () => button.dataset.add === "spouse" ? addSpouse() : addNode(button.dataset.add));
+      });
+    }
+
+    function renderStatus(gen) {
+      const visibleCount = state.cards.filter(isMaleVisible).length;
+      const allCount = state.cards.length;
+      const modeName = { timeline: "时间轴", tree: "男性主干家族树", network: "关系网" }[state.viewMode] || "视图";
+      el.statusBar.innerHTML = `<strong>${modeName}</strong><span>${visibleCount}/${allCount} 张卡片</span><span>缩放 ${(view.scale * 100).toFixed(0)}%</span>`;
+    }
+
+    function setMode(mode, shouldRender = true) {
+      state.viewMode = mode;
+      document.querySelectorAll("#viewModes button").forEach(button => button.classList.toggle("active", button.dataset.mode === mode));
+      if (mode === "tree") state.filters = { parent: true, sibling: false, friend: false };
+      if (mode === "timeline") state.filters = { parent: true, sibling: true, friend: true };
+      if (mode === "network") state.filters = { parent: true, sibling: true, friend: true };
+      if (shouldRender) render();
+    }
+
+    function centerOnSelected(shouldRender = true) {
+      const card = selectedCard();
+      if (!card) return;
+      view.x = window.innerWidth / 2 - card.x * view.scale;
+      view.y = window.innerHeight / 2 - card.y * view.scale + 20;
+      if (shouldRender) render();
+      else renderScene();
+    }
+
+    function zoomBy(factor) {
+      view.scale = Math.min(2.2, Math.max(.45, view.scale * factor));
+      render();
+    }
+
+    function openAddModal() {
+      el.modalTitle.textContent = "新增关系";
+      el.modalHint.textContent = "以当前选中的卡片为基准创建关系。";
+      el.modalBody.innerHTML = `
+        <div class="quick-actions">
+          <button data-add="parent">新增父母</button>
+          <button data-add="child">新增子女</button>
+          <button data-add="sibling">新增同代</button>
+          <button data-add="friend">新增好友</button>
+          <button data-add="spouse">新增配偶</button>
+        </div>
+        <div class="panel-actions">
+          <button class="secondary-btn wide" id="cancelModal">取消</button>
+        </div>
+      `;
+      showModal();
+      el.modalBody.querySelectorAll("[data-add]").forEach(button => {
+        button.addEventListener("click", () => {
+          closeModal();
+          button.dataset.add === "spouse" ? addSpouse() : addNode(button.dataset.add);
+        });
+      });
+      document.getElementById("cancelModal").onclick = closeModal;
+    }
+
+    function addNode(type) {
+      const current = selectedCard() || centerCard();
+      const base = primaryMale(current || { persons: [defaultPerson(0)] });
+      const id = uid(type);
+      let label = "关系";
+      let linkType = "parent";
+      let kind = "single";
+      let birthYear = Number(base.birthYear || baseYear);
+      let gender = "male";
+      if (type === "parent") { label = "父母"; kind = "couple"; birthYear -= 28; }
+      if (type === "child") { label = "子女"; birthYear += 28; }
+      if (type === "sibling") { label = "同代"; linkType = "sibling"; }
+      if (type === "friend") { label = "好友"; linkType = "friend"; }
+      const person = { ...defaultPerson(0), name: label, gender, birthYear, age: Math.max(0, new Date().getFullYear() - birthYear), province: base.province, city: base.city, county: base.county };
+      const persons = kind === "couple"
+        ? [person, { ...defaultPerson(1), name: "待补充", birthYear, age: person.age, province: person.province, city: person.city, county: person.county }]
+        : [person];
+      const card = { id, kind, title: persons.map(p => p.name).join(" · "), relationLabel: label, reminders: [], persons, x: current?.x || 0, y: current?.y || 0 };
+      state.cards.push(card);
+      if (current) {
+        state.links.push({ id: uid("link"), from: type === "parent" ? id : current.id, to: type === "parent" ? current.id : id, type: linkType });
+      } else {
+        state.centerId = id;
+      }
+      state.selectedId = id;
+      detailsOpen = true;
+      render();
+      openEditModal();
+    }
+
+    function addSpouse() {
+      const card = selectedCard();
+      if (!card) return;
+      if (card.persons.length >= 2) {
+        toast("当前卡片已有配偶信息");
+        return;
+      }
+      const p = card.persons[0] || defaultPerson(0);
+      card.kind = "couple";
+      card.persons = [p, { ...defaultPerson(1), name: "待补充", birthYear: p.birthYear, age: p.age, province: p.province, city: p.city, county: p.county }];
+      card.title = card.persons.map(item => item.name).join(" · ");
+      detailsOpen = true;
+      render();
+      openEditModal();
+    }
+
+    function openEditModal() {
+      const card = selectedCard();
+      if (!card) return;
+      el.modalTitle.textContent = "编辑卡片";
+      el.modalHint.textContent = "画布上只展示姓名和出生年，详细信息保存在详情里。";
+      el.modalBody.innerHTML = `
+        <div class="field-card">
+          <div class="two-cols">
+            <div class="field"><label>关系标签</label><input id="editRelation" value="${escapeAttr(card.relationLabel || "")}"></div>
+            <div class="field"><label>卡片类型</label>
+              <select id="editKind">
+                <option value="single" ${card.kind === "single" ? "selected" : ""}>单人</option>
+                <option value="couple" ${card.kind === "couple" ? "selected" : ""}>夫妻</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        ${[0,1].map(idx => personForm(card.persons[idx] || defaultPerson(idx), idx, card.kind === "single" && idx === 1)).join("")}
+        <div class="field-card">
+          <h3>提醒</h3>
+          <div class="two-cols">
+            ${reminderCheck("birth", "生日", card)}
+            ${reminderCheck("anniv", "结婚纪念日", card)}
+            ${reminderCheck("memorial", "忌日", card)}
+            ${reminderCheck("lamp", "长明灯", card)}
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="secondary-btn" id="cancelEdit">取消</button>
+          <button class="primary-btn" id="saveEdit">保存</button>
+          <button class="danger-btn wide" id="deleteCard">删除当前卡片</button>
+        </div>
+      `;
+      showModal();
+      document.getElementById("cancelEdit").onclick = closeModal;
+      document.getElementById("saveEdit").onclick = saveEditModal;
+      document.getElementById("deleteCard").onclick = deleteSelected;
+    }
+
+    function personForm(person, idx, hidden) {
+      return `
+        <div class="field-card" style="${hidden ? "display:none" : ""}">
+          <h3>${idx === 0 ? "主位人物" : "配偶"}</h3>
+          <div class="two-cols">
+            <div class="field"><label>姓名</label><input id="p${idx}name" value="${escapeAttr(person.name || "")}"></div>
+            <div class="field"><label>性别</label>
+              <select id="p${idx}gender">
+                <option value="male" ${person.gender === "male" ? "selected" : ""}>男</option>
+                <option value="female" ${person.gender === "female" ? "selected" : ""}>女</option>
+              </select>
+            </div>
+          </div>
+          <div class="two-cols">
+            <div class="field"><label>出生年</label><input id="p${idx}birthYear" type="number" value="${Number(person.birthYear || baseYear)}"></div>
+            <div class="field"><label>年龄</label><input id="p${idx}age" type="number" value="${Number(person.age || 0)}"></div>
+          </div>
+          <div class="two-cols">
+            <div class="field"><label>省</label><input id="p${idx}province" value="${escapeAttr(person.province || "")}"></div>
+            <div class="field"><label>市</label><input id="p${idx}city" value="${escapeAttr(person.city || "")}"></div>
+          </div>
+          <div class="field"><label>区县</label><input id="p${idx}county" value="${escapeAttr(person.county || "")}"></div>
+          <div class="field"><label>详细地址</label><input id="p${idx}detailAddress" value="${escapeAttr(person.detailAddress || "")}"></div>
+          <div class="two-cols">
+            <div class="field"><label>工作类型</label><input id="p${idx}workType" value="${escapeAttr(person.workType || "")}"></div>
+            <div class="field"><label>职位</label><input id="p${idx}position" value="${escapeAttr(person.position || "")}"></div>
+          </div>
+          <div class="field"><label>手机号</label><input id="p${idx}phone" value="${escapeAttr(person.phone || "")}"></div>
+          <div class="field"><label>备注</label><textarea id="p${idx}notes">${escapeHtml(person.notes || "")}</textarea></div>
+        </div>
+      `;
+    }
+
+    function reminderCheck(type, label, card) {
+      return `<label><input type="checkbox" data-reminder="${type}" ${(card.reminders || []).includes(type) ? "checked" : ""}> ${label}</label>`;
+    }
+
+    function saveEditModal() {
+      const card = selectedCard();
+      card.kind = document.getElementById("editKind").value;
+      card.relationLabel = value("editRelation");
+      const count = card.kind === "couple" ? 2 : 1;
+      card.persons = [];
+      for (let i = 0; i < count; i++) card.persons.push(readPerson(i));
+      card.title = card.persons.map(p => p.name).join(" · ");
+      card.reminders = [...document.querySelectorAll("[data-reminder]:checked")].map(input => input.dataset.reminder);
+      closeModal();
+      render();
+      toast("已保存");
+    }
+
+    function readPerson(idx) {
+      return {
+        ...defaultPerson(idx),
+        name: value(`p${idx}name`) || "未命名",
+        gender: value(`p${idx}gender`) || (idx === 0 ? "male" : "female"),
+        birthYear: Number(value(`p${idx}birthYear`) || baseYear),
+        age: Number(value(`p${idx}age`) || 0),
+        province: value(`p${idx}province`),
+        city: value(`p${idx}city`),
+        county: value(`p${idx}county`),
+        detailAddress: value(`p${idx}detailAddress`),
+        workType: value(`p${idx}workType`),
+        position: value(`p${idx}position`),
+        phone: value(`p${idx}phone`),
+        notes: value(`p${idx}notes`)
+      };
+    }
+
+    function deleteSelected() {
+      const card = selectedCard();
+      if (!card || state.cards.length <= 1) {
+        toast("至少保留一张卡片");
+        return;
+      }
+      state.cards = state.cards.filter(item => item.id !== card.id);
+      state.links = state.links.filter(link => link.from !== card.id && link.to !== card.id);
+      if (state.centerId === card.id) state.centerId = state.cards[0].id;
+      state.selectedId = state.centerId;
+      detailsOpen = false;
+      closeModal();
+      render();
+    }
+
+    function openFilterModal() {
+      const filters = state.filters || { parent: true, sibling: true, friend: true };
+      el.modalTitle.textContent = "筛选关系";
+      el.modalHint.textContent = "家族树会自动只显示父子主干。";
+      el.modalBody.innerHTML = `
+        <div class="field-card">
+          <label><input id="filterParent" type="checkbox" ${filters.parent !== false ? "checked" : ""}> 父母 / 子女</label><br>
+          <label><input id="filterSibling" type="checkbox" ${filters.sibling !== false ? "checked" : ""}> 同代 / 姻亲</label><br>
+          <label><input id="filterFriend" type="checkbox" ${filters.friend !== false ? "checked" : ""}> 好友</label>
+        </div>
+        <div class="panel-actions">
+          <button class="secondary-btn" id="cancelFilter">取消</button>
+          <button class="primary-btn" id="saveFilter">应用</button>
+        </div>
+      `;
+      showModal();
+      document.getElementById("cancelFilter").onclick = closeModal;
+      document.getElementById("saveFilter").onclick = () => {
+        state.filters = {
+          parent: document.getElementById("filterParent").checked,
+          sibling: document.getElementById("filterSibling").checked,
+          friend: document.getElementById("filterFriend").checked
+        };
+        closeModal();
+        render();
+      };
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "wojiayoupu-family-data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed.cards) || !Array.isArray(parsed.links)) throw new Error("bad file");
+          state = {
+            ...structuredClone(sampleData),
+            ...parsed,
+            cards: parsed.cards.map(normalizeCard),
+            links: parsed.links,
+            centerId: parsed.centerId || parsed.cards[0]?.id,
+            selectedId: parsed.selectedId || parsed.centerId || parsed.cards[0]?.id
+          };
+          detailsOpen = false;
+          render();
+          centerOnSelected();
+          toast("导入成功");
+        } catch (error) {
+          toast("导入失败");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function value(id) {
+      return document.getElementById(id)?.value?.trim() || "";
+    }
+
+    function showModal() {
+      closeMoreMenu();
+      el.modalBackdrop.classList.add("show");
+    }
+
+    function closeModal() {
+      el.modalBackdrop.classList.remove("show");
+    }
+
+    function toggleMoreMenu(force) {
+      const next = typeof force === "boolean" ? force : !el.moreMenu.classList.contains("show");
+      el.moreMenu.classList.toggle("show", next);
+    }
+
+    function closeMoreMenu() {
+      el.moreMenu.classList.remove("show");
+    }
+
+    function toast(text) {
+      el.toast.textContent = text;
+      el.toast.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => el.toast.classList.remove("show"), 1700);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "").replace(/[&<>"']/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[s]));
+    }
+    function escapeAttr(str) { return escapeHtml(str).replace(/"/g, "&quot;"); }
+
+    el.canvas.addEventListener("pointerdown", e => {
+      if (e.button !== 0) return;
+      clearTimeout(panHoldTimer);
+      dragStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+      panHoldTimer = setTimeout(() => {
+        dragging = true;
+        el.canvas.classList.add("dragging");
+        try { el.canvas.setPointerCapture(e.pointerId); } catch (error) {}
+      }, 150);
+    });
+    el.canvas.addEventListener("pointermove", e => {
+      if (!dragging) return;
+      view.x = dragStart.vx + e.clientX - dragStart.x;
+      view.y = dragStart.vy + e.clientY - dragStart.y;
+      renderScene();
+    });
+    el.canvas.addEventListener("pointerup", e => {
+      clearTimeout(panHoldTimer);
+      dragging = false;
+      el.canvas.classList.remove("dragging");
+      try { el.canvas.releasePointerCapture(e.pointerId); } catch (error) {}
+    });
+    el.canvas.addEventListener("pointercancel", e => {
+      clearTimeout(panHoldTimer);
+      dragging = false;
+      el.canvas.classList.remove("dragging");
+      try { el.canvas.releasePointerCapture(e.pointerId); } catch (error) {}
+    });
+    el.canvas.addEventListener("wheel", e => {
+      e.preventDefault();
+      if (e.ctrlKey) zoomBy(e.deltaY > 0 ? .92 : 1.08);
+      else if (e.shiftKey) view.x -= e.deltaY;
+      else view.y -= e.deltaY;
+      render();
+    }, { passive: false });
+
+    document.querySelectorAll("#viewModes button").forEach(button => button.addEventListener("click", () => setMode(button.dataset.mode)));
+    document.querySelectorAll(".tabs button").forEach(button => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".tabs button").forEach(item => item.classList.remove("active"));
+        button.classList.add("active");
+        activeTab = button.dataset.tab;
+        renderDetails();
+      });
+    });
+
+    document.getElementById("addBtn").onclick = openAddModal;
+    document.getElementById("moreBtn").onclick = e => {
+      e.stopPropagation();
+      toggleMoreMenu();
+    };
+    document.getElementById("filterBtn").onclick = () => {
+      closeMoreMenu();
+      openFilterModal();
+    };
+    document.getElementById("reminderBtn").onclick = () => { activeTab = "events"; detailsOpen = true; render(); };
+    document.getElementById("zoomOutBtn").onclick = () => { closeMoreMenu(); zoomBy(.88); };
+    document.getElementById("zoomInBtn").onclick = () => { closeMoreMenu(); zoomBy(1.12); };
+    document.getElementById("centerBtn").onclick = () => centerOnSelected();
+    document.getElementById("exportBtn").onclick = () => { closeMoreMenu(); exportData(); };
+    document.getElementById("importBtn").onclick = () => { closeMoreMenu(); el.fileInput.click(); };
+    document.getElementById("resetBtn").onclick = () => {
+      closeMoreMenu();
+      state = cloudStore ? blankFamilyState() : structuredClone(sampleData);
+      state.cards = state.cards.map(normalizeCard);
+      detailsOpen = false;
+      render();
+      centerOnSelected();
+    };
+    document.getElementById("editBtn").onclick = openEditModal;
+    document.getElementById("closeDrawerBtn").onclick = () => { detailsOpen = false; renderDetails(); };
+    el.fileInput.addEventListener("change", e => e.target.files[0] && importData(e.target.files[0]));
+    el.topSearch.addEventListener("input", () => render());
+    el.modalBackdrop.addEventListener("click", e => { if (e.target === el.modalBackdrop) closeModal(); });
+    document.addEventListener("click", e => {
+      if (!e.target.closest(".toolbar")) closeMoreMenu();
+    });
+    window.addEventListener("resize", () => centerOnSelected());
+
+    el.authForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      if (!cloudStore) {
+        el.authMessage.textContent = "云端服务尚未配置。";
+        el.authMessage.classList.add("error");
+        return;
+      }
+      const email = el.authEmail.value.trim();
+      if (!email) return;
+      el.signInBtn.disabled = true;
+      el.authMessage.classList.remove("error");
+      el.authMessage.textContent = "正在发送登录链接…";
+      try {
+        const redirectTo = `${location.origin}${location.pathname}`;
+        await cloudStore.signIn(email, redirectTo);
+        el.authMessage.textContent = "登录链接已发送，请到邮箱中确认。";
+      } catch (error) {
+        console.error(error);
+        el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
+        el.authMessage.classList.add("error");
+      } finally {
+        el.signInBtn.disabled = false;
+      }
+    });
+
+    el.logoutBtn.addEventListener("click", async () => {
+      if (!cloudStore) return;
+      el.logoutBtn.disabled = true;
+      try {
+        await cloudStore.signOut();
+        await clearLocalPrivateCache();
+        currentSession = null;
+        currentTreeId = null;
+        showAuthGate("已安全退出，本机缓存已清除。", false);
+        setCloudStatus("locked", "未登录");
+      } catch (error) {
+        console.error(error);
+        toast("退出失败，请重试");
+      } finally {
+        el.logoutBtn.disabled = false;
+      }
+    });
+
+    initDatabase().catch(error => {
+      console.error(error);
+      const production = Boolean(window.WOJIAYOUPU_CONFIG?.production);
+      if (production) {
+        setCloudStatus("error", "启动失败");
+        showAuthGate("网站启动失败，未读取本机缓存。请联系管理员。", true);
+      } else {
+        state.cards = state.cards.map(normalizeCard);
+        render();
+        centerOnSelected(false);
+        suspendPersistence = false;
+        toast("数据库连接失败，已使用临时数据");
+      }
+    });
+  </script>
+</body>
+</html>
