@@ -624,6 +624,22 @@
       line-height: 1.6;
     }
     .auth-message.error { color: #9a3e45; }
+    .auth-step.hidden { display: none; }
+    .auth-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .auth-actions button { width: auto; min-width: 112px; }
+    .auth-admin-link {
+      display: block;
+      margin-top: 18px;
+      color: #5d6e78;
+      font-size: 12px;
+      text-align: center;
+      text-decoration: none;
+    }
 
     @media (max-width: 980px) {
       .topbar { grid-template-columns: 1fr; align-items: stretch; }
@@ -714,11 +730,22 @@
     <form class="auth-panel" id="authForm">
       <div class="auth-brand"><span class="brand-mark">谱</span><span>我家有谱</span></div>
       <h1 id="authTitle">登录家族空间</h1>
-      <p>人物资料和关系数据默认仅对已授权家族成员开放。输入邮箱后，我们会发送安全登录链接。</p>
-      <label for="authEmail">邮箱</label>
-      <input id="authEmail" type="email" autocomplete="email" required placeholder="name@example.com" />
-      <button id="signInBtn" type="submit">发送登录链接</button>
+      <p>仅已登记的家族成员可以登录。输入邮箱后，我们会发送六位验证码。</p>
+      <div class="auth-step" id="emailStep">
+        <label for="authEmail">邮箱</label>
+        <input id="authEmail" type="email" autocomplete="email" required placeholder="name@example.com" />
+        <button id="signInBtn" type="submit">发送验证码</button>
+      </div>
+      <div class="auth-step hidden" id="otpStep">
+        <label for="authOtp">六位验证码</label>
+        <input id="authOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
+        <div class="auth-actions">
+          <button id="verifyOtpBtn" type="submit">验证并登录</button>
+          <button id="resendOtpBtn" type="button" disabled>60 秒后重发</button>
+        </div>
+      </div>
       <div class="auth-message" id="authMessage" role="status"></div>
+      <a class="auth-admin-link" href="admin/">后台管理</a>
     </form>
   </section>
 
@@ -849,6 +876,8 @@
     let dragging = false;
     let panHoldTimer = null;
     let dragStart = null;
+    let authEmailPending = "";
+    let authResendTimer = null;
     let view = { x: window.innerWidth / 2, y: window.innerHeight / 2 + 30, scale: 1 };
 
     const el = {
@@ -875,8 +904,13 @@
       authGate: document.getElementById("authGate"),
       authForm: document.getElementById("authForm"),
       authEmail: document.getElementById("authEmail"),
+      authOtp: document.getElementById("authOtp"),
+      emailStep: document.getElementById("emailStep"),
+      otpStep: document.getElementById("otpStep"),
       authMessage: document.getElementById("authMessage"),
-      signInBtn: document.getElementById("signInBtn")
+      signInBtn: document.getElementById("signInBtn"),
+      verifyOtpBtn: document.getElementById("verifyOtpBtn"),
+      resendOtpBtn: document.getElementById("resendOtpBtn")
     };
 
     function uid(prefix) {
@@ -1625,6 +1659,10 @@
     }
 
     function openAddModal() {
+      if (["self_editor", "viewer"].includes(state.access?.role)) {
+        toast("当前账号只能维护本人资料");
+        return;
+      }
       el.modalTitle.textContent = "新增关系";
       el.modalHint.textContent = "以当前选中的卡片为基准创建关系。";
       el.modalBody.innerHTML = `
@@ -1698,6 +1736,10 @@
     function openEditModal() {
       const card = selectedCard();
       if (!card) return;
+      if (state.access?.role === "viewer" || (state.access?.role === "self_editor" && !card.persons.some(person => person.id === state.access.personId))) {
+        toast("当前账号无权编辑该人物");
+        return;
+      }
       el.modalTitle.textContent = "编辑卡片";
       el.modalHint.textContent = "画布上只展示姓名和出生年，详细信息保存在详情里。";
       el.modalBody.innerHTML = `
@@ -1804,6 +1846,10 @@
     }
 
     function deleteSelected() {
+      if (["self_editor", "viewer"].includes(state.access?.role)) {
+        toast("当前账号无权删除人物");
+        return;
+      }
       const card = selectedCard();
       if (!card || state.cards.length <= 1) {
         toast("至少保留一张卡片");
@@ -1994,6 +2040,33 @@
     });
     window.addEventListener("resize", () => centerOnSelected());
 
+    function beginOtpCountdown() {
+      clearInterval(authResendTimer);
+      let remaining = 60;
+      el.resendOtpBtn.disabled = true;
+      el.resendOtpBtn.textContent = `${remaining} 秒后重发`;
+      authResendTimer = setInterval(() => {
+        remaining -= 1;
+        el.resendOtpBtn.textContent = remaining > 0 ? `${remaining} 秒后重发` : "重新发送";
+        if (remaining <= 0) {
+          clearInterval(authResendTimer);
+          el.resendOtpBtn.disabled = false;
+        }
+      }, 1000);
+    }
+
+    async function requestLoginOtp() {
+      authEmailPending = el.authEmail.value.trim().toLowerCase();
+      if (!authEmailPending) return;
+      await cloudStore.requestEmailOtp(authEmailPending);
+      el.emailStep.classList.add("hidden");
+      el.otpStep.classList.remove("hidden");
+      el.authOtp.required = true;
+      el.authMessage.textContent = `验证码已发送至 ${authEmailPending}`;
+      el.authOtp.focus();
+      beginOtpCountdown();
+    }
+
     el.authForm.addEventListener("submit", async event => {
       event.preventDefault();
       if (!cloudStore) {
@@ -2001,21 +2074,40 @@
         el.authMessage.classList.add("error");
         return;
       }
-      const email = el.authEmail.value.trim();
-      if (!email) return;
-      el.signInBtn.disabled = true;
       el.authMessage.classList.remove("error");
-      el.authMessage.textContent = "正在发送登录链接…";
+      const verifying = !el.otpStep.classList.contains("hidden");
+      const button = verifying ? el.verifyOtpBtn : el.signInBtn;
+      button.disabled = true;
       try {
-        const redirectTo = `${location.origin}${location.pathname}`;
-        await cloudStore.signIn(email, redirectTo);
-        el.authMessage.textContent = "登录链接已发送，请到邮箱中确认。";
+        if (!verifying) {
+          el.authMessage.textContent = "正在发送验证码...";
+          await requestLoginOtp();
+          return;
+        }
+        const token = el.authOtp.value.trim();
+        if (!/^\d{6}$/.test(token)) throw new Error("请输入六位验证码");
+        el.authMessage.textContent = "正在验证...";
+        await cloudStore.verifyEmailOtp(authEmailPending, token);
+        el.authMessage.textContent = "登录成功，正在加载家族数据";
       } catch (error) {
         console.error(error);
-        el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
+        el.authMessage.textContent = `操作失败：${error.message || "请稍后重试"}`;
         el.authMessage.classList.add("error");
       } finally {
-        el.signInBtn.disabled = false;
+        button.disabled = false;
+      }
+    });
+
+    el.resendOtpBtn.addEventListener("click", async () => {
+      el.resendOtpBtn.disabled = true;
+      try {
+        await cloudStore.requestEmailOtp(authEmailPending);
+        el.authMessage.textContent = "验证码已重新发送";
+        beginOtpCountdown();
+      } catch (error) {
+        el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
+        el.authMessage.classList.add("error");
+        el.resendOtpBtn.disabled = false;
       }
     });
 

@@ -112,6 +112,7 @@ export function normalizeCloudSnapshot(snapshot) {
 
   const viewState = snapshot.viewState || {};
   return {
+    access: snapshot.access || { role: "viewer", personId: "" },
     centerId: cleanText(snapshot.tree?.center_card_id, cards[0]?.id || ""),
     selectedId: cleanText(viewState.selected_card_id, snapshot.tree?.center_card_id || cards[0]?.id || ""),
     viewMode: cleanText(viewState.view_mode, "timeline"),
@@ -144,12 +145,18 @@ export class FamilyCloudStore {
     return this.client.auth.onAuthStateChange((_event, session) => callback(session));
   }
 
-  async signIn(email, redirectTo) {
+  async requestEmailOtp(email) {
     const { error } = await this.client.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo }
+      options: { shouldCreateUser: false }
     });
     if (error) throw error;
+  }
+
+  async verifyEmailOtp(email, token) {
+    const { data, error } = await this.client.auth.verifyOtp({ email, token, type: "email" });
+    if (error) throw error;
+    return data.session || null;
   }
 
   async signOut() {
@@ -176,14 +183,15 @@ export class FamilyCloudStore {
 
   async loadState(treeId) {
     this.onStatus("loading");
-    const [treeResult, cardsResult, personsResult, relationsResult, viewResult] = await Promise.all([
+    const [treeResult, cardsResult, personsResult, relationsResult, viewResult, membershipResult] = await Promise.all([
       this.client.from("family_trees").select("id,name,center_card_id").eq("id", treeId).single(),
       this.client.from("family_cards").select("*").eq("tree_id", treeId),
       this.client.from("persons").select("*").eq("tree_id", treeId),
       this.client.from("relations").select("*").eq("tree_id", treeId),
-      this.client.from("user_view_state").select("*").eq("tree_id", treeId).maybeSingle()
+      this.client.from("user_view_state").select("*").eq("tree_id", treeId).maybeSingle(),
+      this.client.from("family_memberships").select("role,person_id,status").eq("tree_id", treeId).eq("status", "active").single()
     ]);
-    const failure = [treeResult, cardsResult, personsResult, relationsResult, viewResult].find(result => result.error);
+    const failure = [treeResult, cardsResult, personsResult, relationsResult, viewResult, membershipResult].find(result => result.error);
     if (failure) {
       this.onStatus("error");
       throw failure.error;
@@ -194,17 +202,32 @@ export class FamilyCloudStore {
       cards: cardsResult.data,
       persons: personsResult.data,
       relations: relationsResult.data,
-      viewState: viewResult.data
+      viewState: viewResult.data,
+      access: { role: membershipResult.data.role, personId: membershipResult.data.person_id || "" }
     });
   }
 
   async saveState(state, treeId) {
     this.onStatus("saving");
     const payload = serializeState(state, treeId);
-    const { error } = await this.client.rpc("replace_family_state", {
-      p_tree_id: treeId,
-      p_state: payload
-    });
+    let error;
+    if (state.access?.role === "self_editor") {
+      const person = payload.persons.find(item => item.id === state.access.personId);
+      if (!person) throw new Error("未找到与当前账号绑定的人物资料");
+      ({ error } = await this.client.rpc("update_self_person", {
+        p_tree_id: treeId,
+        p_person_id: state.access.personId,
+        p_patch: {
+          name: person.name, gender: person.gender, birthYear: person.birth_year, age: person.age,
+          province: person.province, city: person.city, county: person.county,
+          phone: person.phone, notes: person.notes
+        }
+      }));
+    } else if (state.access?.role === "viewer") {
+      throw new Error("当前账号为只读权限");
+    } else {
+      ({ error } = await this.client.rpc("replace_family_state", { p_tree_id: treeId, p_state: payload }));
+    }
     if (error) {
       this.onStatus("error");
       throw error;

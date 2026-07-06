@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>我家有谱管理后台</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <section class="login-screen" id="loginScreen">
+    <form class="login-panel" id="adminLoginForm">
+      <a class="brand" href="/"><span class="brand-mark">谱</span><span>我家有谱</span></a>
+      <h1>管理后台</h1>
+      <p>使用平台管理员账号登录。</p>
+      <label for="adminPhone">手机号</label>
+      <input id="adminPhone" inputmode="tel" autocomplete="username" required placeholder="请输入手机号">
+      <label for="adminPassword">密码</label>
+      <input id="adminPassword" type="password" autocomplete="current-password" required placeholder="请输入密码">
+      <button class="button primary" type="submit">登录</button>
+      <div class="form-message" id="loginMessage" role="status"></div>
+      <a class="back-link" href="/">返回家谱首页</a>
+    </form>
+  </section>
+
+  <div class="admin-shell" id="adminShell" hidden>
+    <aside class="sidebar">
+      <a class="brand sidebar-brand" href="/"><span class="brand-mark">谱</span><span>我家有谱</span></a>
+      <nav id="adminNav" aria-label="后台导航">
+        <button class="nav-item active" data-route="dashboard">总览</button>
+        <button class="nav-item" data-route="families">家族管理</button>
+        <button class="nav-item" data-route="accounts">账号管理</button>
+        <button class="nav-item" data-route="invites">邀请管理</button>
+        <button class="nav-item" data-route="audit">审计日志</button>
+        <button class="nav-item" data-route="settings">系统设置</button>
+      </nav>
+      <button class="nav-item signout" id="adminSignOut">退出登录</button>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">运营总览</h1>
+          <p id="pageSubtitle">管理家族、容量与成员访问权限</p>
+        </div>
+        <div class="top-actions">
+          <input id="globalSearch" type="search" placeholder="搜索家族编号或名称">
+          <button class="button primary" id="createFamilyBtn">开通家族</button>
+        </div>
+      </header>
+
+      <section class="state-view" data-view="loading" id="loadingState" hidden>
+        <div class="skeleton wide"></div><div class="skeleton"></div><div class="skeleton"></div>
+      </section>
+      <section class="state-view" data-view="empty" id="emptyState" hidden>
+        <h2>暂无数据</h2><p>开通第一个家族后，相关数据会显示在这里。</p>
+      </section>
+      <section class="state-view error" data-view="error" id="errorState" hidden>
+        <h2>数据加载失败</h2><p id="errorText"></p><button class="button" id="retryBtn">重新加载</button>
+      </section>
+
+      <section id="dashboardView" class="view active">
+        <div class="metrics" id="metrics"></div>
+        <div class="section-head"><h2>容量预警</h2><button class="text-button" data-jump="families">查看全部家族</button></div>
+        <div class="table-wrap"><table><thead><tr><th>家族</th><th>人物容量</th><th>账号容量</th><th>状态</th></tr></thead><tbody id="warningRows"></tbody></table></div>
+      </section>
+
+      <section id="familiesView" class="view">
+        <div class="filters"><select id="familyStatusFilter"><option value="">全部状态</option><option value="active">已启用</option><option value="suspended">已停用</option><option value="expired">已到期</option></select></div>
+        <div class="table-wrap"><table><thead><tr><th>家族编号</th><th>家族名称</th><th>人物</th><th>账号</th><th>负责人</th><th>状态</th><th>到期时间</th><th></th></tr></thead><tbody id="familyRows"></tbody></table></div>
+      </section>
+
+      <section id="accountsView" class="view"><div class="section-head"><h2>家族登录账号</h2><span>选择家族后管理成员角色与状态</span></div><div id="accountContent" class="empty-inline">请先从家族列表打开一个家族。</div></section>
+      <section id="invitesView" class="view"><div class="section-head"><h2>二维码邀请</h2><button class="button primary" id="createInviteBtn" disabled>生成邀请</button></div><div id="inviteContent" class="empty-inline">请先从家族列表打开一个家族。</div></section>
+      <section id="auditView" class="view"><div class="section-head"><h2>平台审计日志</h2></div><div class="table-wrap"><table><thead><tr><th>时间</th><th>动作</th><th>对象</th><th>家族</th><th>管理员</th></tr></thead><tbody id="auditRows"></tbody></table></div></section>
+      <section id="settingsView" class="view"><div class="settings-grid"><label>默认人物容量<input id="defaultPersonLimit" type="number" min="1" value="500"></label><label>默认账号容量<input id="defaultAccountLimit" type="number" min="1" value="50"></label><label>默认邀请有效期（天）<input id="defaultInviteDays" type="number" min="1" value="7"></label></div><p class="muted">这些设置仅作为新建家族和邀请的默认值，实际限制由数据库强制执行。</p></section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header><h2 id="modalTitle">开通家族</h2><button class="icon-button" id="closeModal" aria-label="关闭">×</button></header>
+      <form id="familyForm">
+        <div class="form-grid"><label>家族名称<input name="name" required maxlength="120"></label><label>负责人邮箱<input name="ownerEmail" type="email" required></label><label>人物容量<input name="personLimit" type="number" min="1" value="500" required></label><label>账号容量<input name="accountLimit" type="number" min="1" value="50" required></label><label>套餐名称<input name="planName" value="standard"></label><label>到期时间<input name="expiresAt" type="date"></label></div>
+        <div class="form-message" id="familyFormMessage"></div>
+        <footer><button type="button" class="button" id="cancelModal">取消</button><button type="submit" class="button primary">确认开通</button></footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="../config.js"></script>
+  <script src="../vendor/supabase-2.109.0.js"></script>
+  <script src="../vendor/qrcode-generator-2.0.4.js"></script>
+  <script type="module" src="admin-app.js"></script>
+</body>
+</html>
