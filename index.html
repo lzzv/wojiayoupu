@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
@@ -607,6 +607,22 @@
       outline: 0;
     }
     .auth-panel input:focus { border-color: rgba(31,111,122,.72); }
+    .auth-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      color: #4a5d68;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .auth-checkbox input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
     .auth-panel button {
       width: 100%;
       height: 42px;
@@ -730,18 +746,39 @@
     <form class="auth-panel" id="authForm">
       <div class="auth-brand"><span class="brand-mark">谱</span><span>我家有谱</span></div>
       <h1 id="authTitle">登录家族空间</h1>
-      <p>仅已登记的家族成员可以登录。输入邮箱后，我们会发送六位验证码。</p>
-      <div class="auth-step" id="emailStep">
+      <p id="authDescription">输入邮箱和密码即可进入家族空间。忘记密码时，可通过邮箱验证码或恢复链接重设密码。</p>
+      <div class="auth-step" id="loginStep">
         <label for="authEmail">邮箱</label>
         <input id="authEmail" type="email" autocomplete="email" required placeholder="name@example.com" />
-        <button id="signInBtn" type="submit">发送验证码</button>
-      </div>
-      <div class="auth-step hidden" id="otpStep">
-        <label for="authOtp">六位验证码</label>
-        <input id="authOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
+        <label for="authPassword">密码</label>
+        <input id="authPassword" type="password" autocomplete="current-password" required placeholder="请输入密码" />
+        <label class="auth-checkbox" for="rememberLogin">
+          <input id="rememberLogin" type="checkbox" checked />
+          <span>记住登录状态 30 天</span>
+        </label>
         <div class="auth-actions">
-          <button id="verifyOtpBtn" type="submit">验证并登录</button>
-          <button id="resendOtpBtn" type="button" disabled>60 秒后重发</button>
+          <button id="signInBtn" type="submit">邮箱密码登录</button>
+          <button id="forgotPasswordBtn" type="button">忘记密码</button>
+        </div>
+      </div>
+      <div class="auth-step hidden" id="forgotStep">
+        <label for="recoverEmail">找回邮箱</label>
+        <input id="recoverEmail" type="email" autocomplete="email" placeholder="name@example.com" />
+        <div class="auth-actions">
+          <button id="requestRecoveryBtn" type="button">发送验证码</button>
+          <button id="backToLoginBtn" type="button">返回登录</button>
+        </div>
+      </div>
+      <div class="auth-step hidden" id="resetStep">
+        <label for="recoverOtp">邮箱验证码</label>
+        <input id="recoverOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
+        <label for="resetPassword">新密码</label>
+        <input id="resetPassword" type="password" autocomplete="new-password" placeholder="至少 8 位密码" />
+        <label for="resetPasswordConfirm">确认新密码</label>
+        <input id="resetPasswordConfirm" type="password" autocomplete="new-password" placeholder="请再次输入新密码" />
+        <div class="auth-actions">
+          <button id="resetPasswordBtn" type="submit">重设密码并登录</button>
+          <button id="cancelRecoveryBtn" type="button">取消</button>
         </div>
       </div>
       <div class="auth-message" id="authMessage" role="status"></div>
@@ -752,7 +789,13 @@
   <script src="config.js"></script>
   <script src="vendor/supabase-2.109.0.js"></script>
   <script type="module">
-    import { FamilyCloudStore, hasCloudConfig } from "./cloud-store.js";
+        import {
+      createCloudClient,
+      FamilyCloudStore,
+      getRememberLogin,
+      hasCloudConfig,
+      setRememberLogin
+    } from "./cloud-store.js";
 
     const DB_NAME = "wojiayoupu_family_graph";
     const DB_VERSION = 1;
@@ -877,6 +920,7 @@
     let panHoldTimer = null;
     let dragStart = null;
     let authEmailPending = "";
+    let authMode = "login";
     let authResendTimer = null;
     let view = { x: window.innerWidth / 2, y: window.innerHeight / 2 + 30, scale: 1 };
 
@@ -904,13 +948,22 @@
       authGate: document.getElementById("authGate"),
       authForm: document.getElementById("authForm"),
       authEmail: document.getElementById("authEmail"),
-      authOtp: document.getElementById("authOtp"),
-      emailStep: document.getElementById("emailStep"),
-      otpStep: document.getElementById("otpStep"),
+      authPassword: document.getElementById("authPassword"),
+      rememberLogin: document.getElementById("rememberLogin"),
+      recoverEmail: document.getElementById("recoverEmail"),
+      recoverOtp: document.getElementById("recoverOtp"),
+      resetPassword: document.getElementById("resetPassword"),
+      resetPasswordConfirm: document.getElementById("resetPasswordConfirm"),
+      loginStep: document.getElementById("loginStep"),
+      forgotStep: document.getElementById("forgotStep"),
+      resetStep: document.getElementById("resetStep"),
       authMessage: document.getElementById("authMessage"),
       signInBtn: document.getElementById("signInBtn"),
-      verifyOtpBtn: document.getElementById("verifyOtpBtn"),
-      resendOtpBtn: document.getElementById("resendOtpBtn")
+      forgotPasswordBtn: document.getElementById("forgotPasswordBtn"),
+      requestRecoveryBtn: document.getElementById("requestRecoveryBtn"),
+      backToLoginBtn: document.getElementById("backToLoginBtn"),
+      resetPasswordBtn: document.getElementById("resetPasswordBtn"),
+      cancelRecoveryBtn: document.getElementById("cancelRecoveryBtn")
     };
 
     function uid(prefix) {
@@ -1012,10 +1065,26 @@
       el.cloudStatus.textContent = label;
     }
 
-    function showAuthGate(message = "", isError = false) {
-      el.authGate.classList.remove("hidden");
+    function setAuthMode(mode, message = "", isError = false) {
+      authMode = mode;
+      el.loginStep.classList.toggle("hidden", mode !== "login");
+      el.forgotStep.classList.toggle("hidden", mode !== "forgot");
+      el.resetStep.classList.toggle("hidden", mode !== "reset");
+      el.authPassword.required = mode === "login";
+      el.recoverEmail.required = mode === "forgot";
+      el.recoverOtp.required = mode === "reset";
+      el.resetPassword.required = mode === "reset";
+      el.resetPasswordConfirm.required = mode === "reset";
       el.authMessage.textContent = message;
       el.authMessage.classList.toggle("error", isError);
+      if (mode === "forgot" && !el.recoverEmail.value) el.recoverEmail.value = el.authEmail.value.trim();
+      if (mode === "reset" && !el.recoverEmail.value) el.recoverEmail.value = authEmailPending;
+    }
+
+    function showAuthGate(message = "", isError = false) {
+      el.authGate.classList.remove("hidden");
+      setAuthMode(authMode || "login", message, isError);
+      el.rememberLogin.checked = getRememberLogin();
       el.logoutBtn.hidden = true;
       el.cards.innerHTML = "";
       el.relationLines.innerHTML = "";
@@ -1024,8 +1093,11 @@
 
     function hideAuthGate() {
       el.authGate.classList.add("hidden");
-      el.authMessage.textContent = "";
-      el.authMessage.classList.remove("error");
+      setAuthMode("login");
+      el.authPassword.value = "";
+      el.recoverOtp.value = "";
+      el.resetPassword.value = "";
+      el.resetPasswordConfirm.value = "";
       el.logoutBtn.hidden = !cloudStore;
     }
 
@@ -1113,8 +1185,15 @@
       }
     }
 
-    async function handleAuthSession(session) {
+    async function handleAuthSession(session, event = "") {
       currentSession = session;
+      if (event === "PASSWORD_RECOVERY") {
+        authEmailPending = session?.user?.email || el.recoverEmail.value.trim().toLowerCase();
+        setCloudStatus("locked", "重设密码");
+        showAuthGate("邮箱验证通过，请设置新密码。", false);
+        setAuthMode("reset", "邮箱验证通过，请设置新密码。", false);
+        return;
+      }
       if (!session) {
         currentTreeId = null;
         suspendPersistence = true;
@@ -1127,18 +1206,21 @@
 
     async function initializeCloudMode(config) {
       if (!window.supabase?.createClient) throw new Error("Supabase 客户端加载失败");
-      const client = window.supabase.createClient(config.url, config.publishableKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-      });
+      const client = createCloudClient(config, { detectSessionInUrl: true });
       cloudStore = new FamilyCloudStore({
         client,
         onStatus(status) {
-          const labels = { loading: "同步中", saving: "保存中", saved: "云端已同步", error: "同步失败" };
+          const labels = {
+            loading: "同步中",
+            saving: "保存中",
+            saved: "云端已同步",
+            error: "同步失败"
+          };
           setCloudStatus(status, labels[status] || "云端");
         }
       });
-      cloudStore.onAuthStateChange(session => {
-        queueMicrotask(() => handleAuthSession(session).catch(error => {
+      cloudStore.onAuthStateChange((session, event) => {
+        queueMicrotask(() => handleAuthSession(session, event).catch(error => {
           console.error(error);
           setCloudStatus("error", "认证失败");
           showAuthGate("登录状态处理失败，请刷新后重试。", true);
@@ -2040,31 +2122,48 @@
     });
     window.addEventListener("resize", () => centerOnSelected());
 
-    function beginOtpCountdown() {
-      clearInterval(authResendTimer);
-      let remaining = 60;
-      el.resendOtpBtn.disabled = true;
-      el.resendOtpBtn.textContent = `${remaining} 秒后重发`;
-      authResendTimer = setInterval(() => {
-        remaining -= 1;
-        el.resendOtpBtn.textContent = remaining > 0 ? `${remaining} 秒后重发` : "重新发送";
-        if (remaining <= 0) {
-          clearInterval(authResendTimer);
-          el.resendOtpBtn.disabled = false;
-        }
-      }, 1000);
+    function validateResetPassword() {
+      const password = el.resetPassword.value.trim();
+      const confirm = el.resetPasswordConfirm.value.trim();
+      if (password.length < 8) throw new Error("新密码至少 8 位");
+      if (password !== confirm) throw new Error("两次输入的密码不一致");
+      return password;
     }
 
-    async function requestLoginOtp() {
-      authEmailPending = el.authEmail.value.trim().toLowerCase();
-      if (!authEmailPending) return;
-      await cloudStore.requestEmailOtp(authEmailPending);
-      el.emailStep.classList.add("hidden");
-      el.otpStep.classList.remove("hidden");
-      el.authOtp.required = true;
-      el.authMessage.textContent = `验证码已发送至 ${authEmailPending}`;
-      el.authOtp.focus();
-      beginOtpCountdown();
+    async function signInWithPasswordFlow() {
+      const email = el.authEmail.value.trim().toLowerCase();
+      const password = el.authPassword.value;
+      if (!email) throw new Error("请输入邮箱");
+      if (!password) throw new Error("请输入密码");
+      setRememberLogin(el.rememberLogin.checked);
+      authEmailPending = email;
+      el.authMessage.textContent = "正在登录...";
+      await cloudStore.signInWithPassword(email, password);
+      el.authMessage.textContent = "登录成功，正在加载家族数据...";
+    }
+
+    async function requestPasswordRecoveryFlow() {
+      const email = el.recoverEmail.value.trim().toLowerCase();
+      if (!email) throw new Error("请输入找回邮箱");
+      authEmailPending = email;
+      el.authMessage.textContent = "正在发送重设邮件...";
+      await cloudStore.requestPasswordRecovery(email);
+      setAuthMode("reset", `验证码或恢复链接已发送至 ${email}。若邮件中提供 6 位验证码，可在下方直接重设密码。`, false);
+    }
+
+    async function resetPasswordFlow() {
+      const password = validateResetPassword();
+      const email = (el.recoverEmail.value.trim() || authEmailPending).toLowerCase();
+      const otp = el.recoverOtp.value.trim();
+      if (/^\d{6}$/.test(otp)) {
+        el.authMessage.textContent = "正在校验验证码...";
+        await cloudStore.verifyRecoveryOtp(email, otp);
+      } else if (!currentSession) {
+        throw new Error("请输入邮件中的 6 位验证码，或先点击邮件里的恢复链接");
+      }
+      el.authMessage.textContent = "正在更新密码...";
+      await cloudStore.updatePassword(password);
+      el.authMessage.textContent = "密码已更新，正在进入家族空间...";
     }
 
     el.authForm.addEventListener("submit", async event => {
@@ -2074,21 +2173,12 @@
         el.authMessage.classList.add("error");
         return;
       }
-      el.authMessage.classList.remove("error");
-      const verifying = !el.otpStep.classList.contains("hidden");
-      const button = verifying ? el.verifyOtpBtn : el.signInBtn;
+      const button = authMode === "reset" ? el.resetPasswordBtn : el.signInBtn;
       button.disabled = true;
+      el.authMessage.classList.remove("error");
       try {
-        if (!verifying) {
-          el.authMessage.textContent = "正在发送验证码...";
-          await requestLoginOtp();
-          return;
-        }
-        const token = el.authOtp.value.trim();
-        if (!/^\d{6}$/.test(token)) throw new Error("请输入六位验证码");
-        el.authMessage.textContent = "正在验证...";
-        await cloudStore.verifyEmailOtp(authEmailPending, token);
-        el.authMessage.textContent = "登录成功，正在加载家族数据";
+        if (authMode === "login") await signInWithPasswordFlow();
+        else if (authMode === "reset") await resetPasswordFlow();
       } catch (error) {
         console.error(error);
         el.authMessage.textContent = `操作失败：${error.message || "请稍后重试"}`;
@@ -2098,16 +2188,28 @@
       }
     });
 
-    el.resendOtpBtn.addEventListener("click", async () => {
-      el.resendOtpBtn.disabled = true;
+    el.forgotPasswordBtn.addEventListener("click", () => {
+      setAuthMode("forgot");
+    });
+
+    el.backToLoginBtn.addEventListener("click", () => {
+      setAuthMode("login");
+    });
+
+    el.cancelRecoveryBtn.addEventListener("click", () => {
+      setAuthMode("login");
+    });
+
+    el.requestRecoveryBtn.addEventListener("click", async () => {
+      el.requestRecoveryBtn.disabled = true;
+      el.authMessage.classList.remove("error");
       try {
-        await cloudStore.requestEmailOtp(authEmailPending);
-        el.authMessage.textContent = "验证码已重新发送";
-        beginOtpCountdown();
+        await requestPasswordRecoveryFlow();
       } catch (error) {
         el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
         el.authMessage.classList.add("error");
-        el.resendOtpBtn.disabled = false;
+      } finally {
+        el.requestRecoveryBtn.disabled = false;
       }
     });
 
@@ -2146,3 +2248,5 @@
   </script>
 </body>
 </html>
+
+

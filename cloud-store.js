@@ -6,12 +6,90 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+const REMEMBER_LOGIN_KEY = "wojiayoupu_remember_login";
+
+function isStorageUsable(storage) {
+  if (!storage) return false;
+  try {
+    const probe = "__wojiayoupu_probe__";
+    storage.setItem(probe, "1");
+    storage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function localStorageFor(win = globalThis.window) {
+  return isStorageUsable(win?.localStorage) ? win.localStorage : null;
+}
+
+function sessionStorageFor(win = globalThis.window) {
+  return isStorageUsable(win?.sessionStorage) ? win.sessionStorage : null;
+}
+
+function rememberEnabled(win = globalThis.window) {
+  const local = localStorageFor(win);
+  return local ? local.getItem(REMEMBER_LOGIN_KEY) !== "0" : true;
+}
+
+function preferredStorage(win = globalThis.window) {
+  return rememberEnabled(win) ? localStorageFor(win) || sessionStorageFor(win) : sessionStorageFor(win) || localStorageFor(win);
+}
+
+export function getRememberLogin(win = globalThis.window) {
+  return rememberEnabled(win);
+}
+
+export function setRememberLogin(enabled, win = globalThis.window) {
+  const local = localStorageFor(win);
+  if (local) local.setItem(REMEMBER_LOGIN_KEY, enabled ? "1" : "0");
+}
+
+export function createAuthStorage(win = globalThis.window) {
+  return {
+    getItem(key) {
+      const preferred = preferredStorage(win);
+      const local = localStorageFor(win);
+      const session = sessionStorageFor(win);
+      return preferred?.getItem(key) ?? local?.getItem(key) ?? session?.getItem(key) ?? null;
+    },
+    setItem(key, value) {
+      const target = preferredStorage(win);
+      const local = localStorageFor(win);
+      const session = sessionStorageFor(win);
+      if (local && local !== target) local.removeItem(key);
+      if (session && session !== target) session.removeItem(key);
+      target?.setItem(key, value);
+    },
+    removeItem(key) {
+      const local = localStorageFor(win);
+      const session = sessionStorageFor(win);
+      local?.removeItem(key);
+      session?.removeItem(key);
+    }
+  };
+}
+
 export function hasCloudConfig(config) {
   return Boolean(
     config &&
     /^https:\/\//.test(cleanText(config.url)) &&
     cleanText(config.publishableKey).length > 10
   );
+}
+
+export function createCloudClient(config, { detectSessionInUrl = true, win = globalThis.window } = {}) {
+  if (!hasCloudConfig(config)) throw new Error("Supabase configuration is incomplete");
+  if (!win?.supabase?.createClient) throw new Error("Supabase client library is unavailable");
+  return win.supabase.createClient(config.url, config.publishableKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl,
+      storage: createAuthStorage(win)
+    }
+  });
 }
 
 export function serializeState(state, treeId) {
@@ -89,6 +167,11 @@ function normalizePerson(person) {
   };
 }
 
+function recoveryRedirectUrl(win = globalThis.window) {
+  const origin = /^https?:\/\//.test(cleanText(win?.location?.origin)) ? win.location.origin : "https://1000011.com";
+  return `${origin}/?mode=recovery`;
+}
+
 export function normalizeCloudSnapshot(snapshot) {
   const peopleByCard = new Map();
   for (const person of snapshot.persons || []) {
@@ -142,7 +225,7 @@ export class FamilyCloudStore {
   }
 
   onAuthStateChange(callback) {
-    return this.client.auth.onAuthStateChange((_event, session) => callback(session));
+    return this.client.auth.onAuthStateChange((event, session) => callback(session, event));
   }
 
   async requestEmailOtp(email) {
@@ -157,6 +240,31 @@ export class FamilyCloudStore {
     const { data, error } = await this.client.auth.verifyOtp({ email, token, type: "email" });
     if (error) throw error;
     return data.session || null;
+  }
+
+  async signInWithPassword(email, password) {
+    const { data, error } = await this.client.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data.session || null;
+  }
+
+  async requestPasswordRecovery(email) {
+    const { error } = await this.client.auth.resetPasswordForEmail(email, {
+      redirectTo: recoveryRedirectUrl()
+    });
+    if (error) throw error;
+  }
+
+  async verifyRecoveryOtp(email, token) {
+    const { data, error } = await this.client.auth.verifyOtp({ email, token, type: "recovery" });
+    if (error) throw error;
+    return data.session || null;
+  }
+
+  async updatePassword(password) {
+    const { data, error } = await this.client.auth.updateUser({ password });
+    if (error) throw error;
+    return data.user || null;
   }
 
   async signOut() {
