@@ -640,6 +640,12 @@
       line-height: 1.6;
     }
     .auth-message.error { color: #9a3e45; }
+    .auth-email-hint {
+      margin: -2px 0 10px !important;
+      color: #526874 !important;
+      font-size: 12px !important;
+      line-height: 1.6 !important;
+    }
     .auth-step.hidden { display: none; }
     .auth-actions {
       display: grid;
@@ -771,6 +777,7 @@
       </div>
       <div class="auth-step hidden" id="resetStep">
         <label for="recoverOtp">邮箱验证码</label>
+        <p class="auth-email-hint" id="recoveryEmailHint"></p>
         <input id="recoverOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
         <label for="resetPassword">新密码</label>
         <input id="resetPassword" type="password" autocomplete="new-password" placeholder="至少 8 位密码" />
@@ -780,6 +787,7 @@
           <button id="resetPasswordBtn" type="submit">重设密码并登录</button>
           <button id="cancelRecoveryBtn" type="button">取消</button>
         </div>
+        <button id="resendRecoveryBtn" type="button">重新发送验证码</button>
       </div>
       <div class="auth-message" id="authMessage" role="status"></div>
       <a class="auth-admin-link" href="admin/">后台管理</a>
@@ -952,6 +960,7 @@
       rememberLogin: document.getElementById("rememberLogin"),
       recoverEmail: document.getElementById("recoverEmail"),
       recoverOtp: document.getElementById("recoverOtp"),
+      recoveryEmailHint: document.getElementById("recoveryEmailHint"),
       resetPassword: document.getElementById("resetPassword"),
       resetPasswordConfirm: document.getElementById("resetPasswordConfirm"),
       loginStep: document.getElementById("loginStep"),
@@ -961,6 +970,7 @@
       signInBtn: document.getElementById("signInBtn"),
       forgotPasswordBtn: document.getElementById("forgotPasswordBtn"),
       requestRecoveryBtn: document.getElementById("requestRecoveryBtn"),
+      resendRecoveryBtn: document.getElementById("resendRecoveryBtn"),
       backToLoginBtn: document.getElementById("backToLoginBtn"),
       resetPasswordBtn: document.getElementById("resetPasswordBtn"),
       cancelRecoveryBtn: document.getElementById("cancelRecoveryBtn")
@@ -1079,6 +1089,26 @@
       el.authMessage.classList.toggle("error", isError);
       if (mode === "forgot" && !el.recoverEmail.value) el.recoverEmail.value = el.authEmail.value.trim();
       if (mode === "reset" && !el.recoverEmail.value) el.recoverEmail.value = authEmailPending;
+      if (mode === "reset") {
+        const email = (el.recoverEmail.value.trim() || authEmailPending).toLowerCase();
+        el.recoveryEmailHint.textContent = email ? `验证码已发送至 ${email}` : "请输入邮件中的六位验证码";
+      }
+    }
+
+    function startRecoveryResendCooldown(seconds = 60) {
+      if (authResendTimer) clearInterval(authResendTimer);
+      let remaining = seconds;
+      const update = () => {
+        el.resendRecoveryBtn.disabled = remaining > 0;
+        el.resendRecoveryBtn.textContent = remaining > 0 ? `${remaining} 秒后可重新发送` : "重新发送验证码";
+        remaining -= 1;
+        if (remaining < 0) {
+          clearInterval(authResendTimer);
+          authResendTimer = null;
+        }
+      };
+      update();
+      authResendTimer = setInterval(update, 1000);
     }
 
     function showAuthGate(message = "", isError = false) {
@@ -1098,6 +1128,8 @@
       el.recoverOtp.value = "";
       el.resetPassword.value = "";
       el.resetPasswordConfirm.value = "";
+      if (authResendTimer) clearInterval(authResendTimer);
+      authResendTimer = null;
       el.logoutBtn.hidden = !cloudStore;
     }
 
@@ -2146,9 +2178,10 @@
       const email = el.recoverEmail.value.trim().toLowerCase();
       if (!email) throw new Error("请输入找回邮箱");
       authEmailPending = email;
-      el.authMessage.textContent = "正在发送重设邮件...";
+      el.authMessage.textContent = "正在发送验证码...";
       await cloudStore.requestPasswordRecovery(email);
-      setAuthMode("reset", `验证码或恢复链接已发送至 ${email}。若邮件中提供 6 位验证码，可在下方直接重设密码。`, false);
+      setAuthMode("reset", "验证码已发送，请检查收件箱和垃圾邮件。验证码一小时内有效。", false);
+      startRecoveryResendCooldown();
     }
 
     async function resetPasswordFlow() {
@@ -2210,6 +2243,19 @@
         el.authMessage.classList.add("error");
       } finally {
         el.requestRecoveryBtn.disabled = false;
+      }
+    });
+
+    el.resendRecoveryBtn.addEventListener("click", async () => {
+      el.resendRecoveryBtn.disabled = true;
+      el.authMessage.classList.remove("error");
+      try {
+        await requestPasswordRecoveryFlow();
+      } catch (error) {
+        el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
+        el.authMessage.classList.add("error");
+        el.resendRecoveryBtn.disabled = false;
+        el.resendRecoveryBtn.textContent = "重新发送验证码";
       }
     });
 
