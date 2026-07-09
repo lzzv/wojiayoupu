@@ -696,6 +696,7 @@
         <button id="logoutBtn" hidden>退出</button>
         <button id="moreBtn">更多</button>
         <div class="more-menu" id="moreMenu">
+          <button id="recoveryPasscodeBtn" hidden>家族口令</button>
           <button id="filterBtn">筛选关系</button>
           <button id="zoomOutBtn">缩小画布</button>
           <button id="zoomInBtn">放大画布</button>
@@ -752,7 +753,7 @@
     <form class="auth-panel" id="authForm">
       <div class="auth-brand"><span class="brand-mark">谱</span><span>我家有谱</span></div>
       <h1 id="authTitle">登录家族空间</h1>
-      <p id="authDescription">输入邮箱和密码即可进入家族空间。忘记密码时，可通过邮箱验证码或恢复链接重设密码。</p>
+        <p id="authDescription">输入邮箱和密码即可进入家族空间。忘记密码时，可通过家族名称、登录账号和家族口令直接重设密码。</p>
       <div class="auth-step" id="loginStep">
         <label for="authEmail">邮箱</label>
         <input id="authEmail" type="email" autocomplete="email" required placeholder="name@example.com" />
@@ -768,11 +769,19 @@
         </div>
       </div>
       <div class="auth-step hidden" id="forgotStep">
-        <label for="recoverEmail">找回邮箱</label>
-        <input id="recoverEmail" type="email" autocomplete="email" placeholder="name@example.com" />
-        <p class="auth-email-hint">发送后请检查收件箱和垃圾邮件。若邮件里没有 6 位验证码，请直接点击邮件里的恢复链接。</p>
+        <label for="recoverFamilyName">家族名称</label>
+        <input id="recoverFamilyName" autocomplete="organization" placeholder="请输入家族名称" />
+        <label for="recoverAccount">登录账号</label>
+        <input id="recoverAccount" autocomplete="username" placeholder="请输入登录邮箱或手机号" />
+        <label for="recoverPasscode">家族口令</label>
+        <input id="recoverPasscode" type="text" autocomplete="off" placeholder="请输入家族口令，支持中文" />
+        <label for="recoverDirectPassword">新密码</label>
+        <input id="recoverDirectPassword" type="password" autocomplete="new-password" placeholder="至少 8 位密码" />
+        <label for="recoverDirectPasswordConfirm">确认新密码</label>
+        <input id="recoverDirectPasswordConfirm" type="password" autocomplete="new-password" placeholder="请再次输入新密码" />
+        <p class="auth-email-hint">家族口令由族长在家谱界面设置，支持中文。邮件恢复链接仍可兼容使用。</p>
         <div class="auth-actions">
-          <button id="requestRecoveryBtn" type="button">发送验证码</button>
+          <button id="requestRecoveryBtn" type="button">直接重设密码</button>
           <button id="backToLoginBtn" type="button">返回登录</button>
         </div>
       </div>
@@ -959,7 +968,11 @@
       authEmail: document.getElementById("authEmail"),
       authPassword: document.getElementById("authPassword"),
       rememberLogin: document.getElementById("rememberLogin"),
-      recoverEmail: document.getElementById("recoverEmail"),
+      recoverFamilyName: document.getElementById("recoverFamilyName"),
+      recoverAccount: document.getElementById("recoverAccount"),
+      recoverPasscode: document.getElementById("recoverPasscode"),
+      recoverDirectPassword: document.getElementById("recoverDirectPassword"),
+      recoverDirectPasswordConfirm: document.getElementById("recoverDirectPasswordConfirm"),
       recoverOtp: document.getElementById("recoverOtp"),
       recoveryEmailHint: document.getElementById("recoveryEmailHint"),
       resetPassword: document.getElementById("resetPassword"),
@@ -972,6 +985,7 @@
       forgotPasswordBtn: document.getElementById("forgotPasswordBtn"),
       requestRecoveryBtn: document.getElementById("requestRecoveryBtn"),
       resendRecoveryBtn: document.getElementById("resendRecoveryBtn"),
+      recoveryPasscodeBtn: document.getElementById("recoveryPasscodeBtn"),
       backToLoginBtn: document.getElementById("backToLoginBtn"),
       resetPasswordBtn: document.getElementById("resetPasswordBtn"),
       cancelRecoveryBtn: document.getElementById("cancelRecoveryBtn")
@@ -1081,15 +1095,13 @@
     }
 
     function recoveryResetHint() {
-      const email = (el.recoverEmail.value.trim() || authEmailPending).toLowerCase();
+      const account = (el.recoverAccount?.value?.trim() || authEmailPending || "").toLowerCase();
       if (currentSession || isRecoveryLinkMode()) {
-        return email
-          ? `已打开 ${email} 的恢复链接。若邮件里同时附带 6 位验证码，也可以直接填写。`
+        return account
+          ? `已打开 ${account} 的恢复链接。若邮件里同时附带 6 位验证码，也可以直接填写。`
           : "已打开邮件恢复链接，请直接设置新密码；若邮件里有 6 位验证码，也可以填写。";
       }
-      return email
-        ? `验证码已发送至 ${email}。如果邮件里没有 6 位验证码，请直接点击邮件里的恢复链接。`
-        : "请输入邮件中的 6 位验证码；如果邮件里没有验证码，请直接点击恢复链接。";
+      return "如需通过家族口令直接重设密码，请返回上一页填写家族名称、登录账号和家族口令。";
     }
 
     function setAuthMode(mode, message = "", isError = false) {
@@ -1098,14 +1110,17 @@
       el.forgotStep.classList.toggle("hidden", mode !== "forgot");
       el.resetStep.classList.toggle("hidden", mode !== "reset");
       el.authPassword.required = mode === "login";
-      el.recoverEmail.required = mode === "forgot";
+      el.recoverFamilyName.required = mode === "forgot";
+      el.recoverAccount.required = mode === "forgot";
+      el.recoverPasscode.required = mode === "forgot";
+      el.recoverDirectPassword.required = mode === "forgot";
+      el.recoverDirectPasswordConfirm.required = mode === "forgot";
       el.recoverOtp.required = false;
       el.resetPassword.required = mode === "reset";
       el.resetPasswordConfirm.required = mode === "reset";
       el.authMessage.textContent = message;
       el.authMessage.classList.toggle("error", isError);
-      if (mode === "forgot" && !el.recoverEmail.value) el.recoverEmail.value = el.authEmail.value.trim();
-      if (mode === "reset" && !el.recoverEmail.value) el.recoverEmail.value = authEmailPending;
+      if (mode === "forgot" && !el.recoverAccount.value) el.recoverAccount.value = el.authEmail.value.trim();
       if (mode === "reset") {
         el.recoveryEmailHint.textContent = recoveryResetHint();
       }
@@ -1140,6 +1155,11 @@
     function hideAuthGate() {
       el.authGate.classList.add("hidden");
       setAuthMode("login");
+      el.recoverFamilyName.value = "";
+      el.recoverAccount.value = "";
+      el.recoverPasscode.value = "";
+      el.recoverDirectPassword.value = "";
+      el.recoverDirectPasswordConfirm.value = "";
       el.authPassword.value = "";
       el.recoverOtp.value = "";
       el.resetPassword.value = "";
@@ -1242,7 +1262,7 @@
     async function handleAuthSession(session, event = "") {
       currentSession = session;
       if (event === "PASSWORD_RECOVERY") {
-        authEmailPending = session?.user?.email || el.recoverEmail.value.trim().toLowerCase();
+        authEmailPending = session?.user?.email || el.recoverAccount.value.trim().toLowerCase();
         setCloudStatus("locked", "重设密码");
         showAuthGate("邮箱验证通过，请直接设置新密码。若邮件里有 6 位验证码，也可以填写。", false);
         setAuthMode("reset", "邮箱验证通过，请直接设置新密码。若邮件里有 6 位验证码，也可以填写。", false);
@@ -1521,6 +1541,7 @@
 
     function render() {
       const gen = applyAutoLayout();
+      el.recoveryPasscodeBtn.hidden = !canManageRecoveryPasscode();
       renderScene();
       renderWorldLines();
       renderRelations(gen);
@@ -2085,6 +2106,78 @@
       el.moreMenu.classList.remove("show");
     }
 
+    function canManageRecoveryPasscode() {
+      return Boolean(cloudStore && currentSession && currentTreeId && state.access?.role === "owner");
+    }
+
+    async function openRecoveryPasscodeModal() {
+      if (!canManageRecoveryPasscode()) {
+        toast("仅族长可以设置家族口令");
+        return;
+      }
+      closeMoreMenu();
+      el.modalTitle.textContent = "家族口令";
+      el.modalHint.textContent = "用于家族名称 + 账号 + 家族口令直接修改密码。默认建议值为族长手机号后 6 位，也支持中文口令。";
+      el.modalBody.innerHTML = `
+        <div class="field-card">
+          <p>正在加载当前家族口令设置...</p>
+        </div>
+      `;
+      showModal();
+      try {
+        const result = await cloudStore.getFamilyRecoveryPasscode(currentTreeId);
+        const suggestedDefault = result?.suggestedDefault || "";
+        const configured = Boolean(result?.configured);
+        el.modalBody.innerHTML = `
+          <div class="field-card">
+            <h3>当前状态</h3>
+            <p>${configured ? "已设置家族口令" : "未设置家族口令"}</p>
+            <p>${suggestedDefault ? `默认建议值：${escapeHtml(suggestedDefault)}` : "未读取到族长手机号后 6 位，请直接自定义口令。"}</p>
+          </div>
+          <div class="field-card">
+            <div class="field">
+              <label>家族口令</label>
+              <input id="familyRecoveryPasscodeInput" type="text" autocomplete="off" placeholder="至少 4 个字符，支持中文" value="${escapeAttr(configured ? "" : suggestedDefault)}">
+            </div>
+          </div>
+          <div class="panel-actions">
+            <button class="secondary-btn" id="cancelRecoveryPasscode">取消</button>
+            <button class="primary-btn" id="saveRecoveryPasscode">保存口令</button>
+          </div>
+        `;
+        document.getElementById("cancelRecoveryPasscode").onclick = closeModal;
+        document.getElementById("saveRecoveryPasscode").onclick = async () => {
+          const saveBtn = document.getElementById("saveRecoveryPasscode");
+          const passcode = document.getElementById("familyRecoveryPasscodeInput")?.value?.trim() || "";
+          if ([...passcode].length < 4) {
+            toast("家族口令至少 4 个字符");
+            return;
+          }
+          saveBtn.disabled = true;
+          try {
+            await cloudStore.setFamilyRecoveryPasscode({ treeId: currentTreeId, passcode });
+            closeModal();
+            toast("家族口令已保存");
+          } catch (error) {
+            console.error(error);
+            toast(error.message || "保存失败");
+            saveBtn.disabled = false;
+          }
+        };
+      } catch (error) {
+        console.error(error);
+        el.modalBody.innerHTML = `
+          <div class="field-card">
+            <p>家族口令加载失败：${escapeHtml(error.message || "请稍后重试")}</p>
+          </div>
+          <div class="panel-actions">
+            <button class="secondary-btn wide" id="closeRecoveryPasscodeError">关闭</button>
+          </div>
+        `;
+        document.getElementById("closeRecoveryPasscodeError").onclick = closeModal;
+      }
+    }
+
     function toast(text) {
       el.toast.textContent = text;
       el.toast.classList.add("show");
@@ -2152,6 +2245,9 @@
       closeMoreMenu();
       openFilterModal();
     };
+    document.getElementById("recoveryPasscodeBtn").onclick = () => {
+      openRecoveryPasscodeModal();
+    };
     document.getElementById("reminderBtn").onclick = () => { activeTab = "events"; detailsOpen = true; render(); };
     document.getElementById("zoomOutBtn").onclick = () => { closeMoreMenu(); zoomBy(.88); };
     document.getElementById("zoomInBtn").onclick = () => { closeMoreMenu(); zoomBy(1.12); };
@@ -2184,6 +2280,14 @@
       return password;
     }
 
+    function validateDirectRecoveryPassword() {
+      const password = el.recoverDirectPassword.value.trim();
+      const confirm = el.recoverDirectPasswordConfirm.value.trim();
+      if (password.length < 8) throw new Error("新密码至少 8 位");
+      if (password !== confirm) throw new Error("两次输入的密码不一致");
+      return password;
+    }
+
     async function signInWithPasswordFlow() {
       const email = el.authEmail.value.trim().toLowerCase();
       const password = el.authPassword.value;
@@ -2196,19 +2300,24 @@
       el.authMessage.textContent = "登录成功，正在加载家族数据...";
     }
 
-    async function requestPasswordRecoveryFlow() {
-      const email = el.recoverEmail.value.trim().toLowerCase();
-      if (!email) throw new Error("请输入找回邮箱");
-      authEmailPending = email;
-      el.authMessage.textContent = "正在发送验证码...";
-      await cloudStore.requestPasswordRecovery(email);
-      setAuthMode("reset", "找回邮件已发送，请检查收件箱和垃圾邮件。若邮件里没有 6 位验证码，请直接点击恢复链接。", false);
-      startRecoveryResendCooldown();
+    async function directPasswordResetFlow() {
+      const familyName = el.recoverFamilyName.value.trim();
+      const account = el.recoverAccount.value.trim().toLowerCase();
+      const recoveryPasscode = el.recoverPasscode.value.trim();
+      const password = validateDirectRecoveryPassword();
+      if (!familyName) throw new Error("请输入家族名称");
+      if (!account) throw new Error("请输入登录账号");
+      if (!recoveryPasscode) throw new Error("请输入家族口令");
+      authEmailPending = account;
+      el.authMessage.textContent = "正在校验家族信息并重设密码...";
+      await cloudStore.resetPasswordByFamilyAccount({ familyName, account, recoveryPasscode, password });
+      el.authMessage.textContent = "密码已重设，正在自动登录...";
+      await cloudStore.signInWithPassword(account, password);
     }
 
     async function resetPasswordFlow() {
       const password = validateResetPassword();
-      const email = (el.recoverEmail.value.trim() || authEmailPending).toLowerCase();
+      const email = authEmailPending.toLowerCase();
       const otp = el.recoverOtp.value.trim();
       if (/^\d{6}$/.test(otp)) {
         el.authMessage.textContent = "正在校验验证码...";
@@ -2259,9 +2368,9 @@
       el.requestRecoveryBtn.disabled = true;
       el.authMessage.classList.remove("error");
       try {
-        await requestPasswordRecoveryFlow();
+        await directPasswordResetFlow();
       } catch (error) {
-        el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
+        el.authMessage.textContent = `重置失败：${error.message || "请稍后重试"}`;
         el.authMessage.classList.add("error");
       } finally {
         el.requestRecoveryBtn.disabled = false;
@@ -2272,7 +2381,10 @@
       el.resendRecoveryBtn.disabled = true;
       el.authMessage.classList.remove("error");
       try {
-        await requestPasswordRecoveryFlow();
+        if (!authEmailPending || !authEmailPending.includes("@")) throw new Error("当前恢复链接未绑定邮箱，无法重新发送邮件");
+        await cloudStore.requestPasswordRecovery(authEmailPending);
+        setAuthMode("reset", "恢复邮件已重新发送，请检查收件箱和垃圾邮件。", false);
+        startRecoveryResendCooldown();
       } catch (error) {
         el.authMessage.textContent = `发送失败：${error.message || "请稍后重试"}`;
         el.authMessage.classList.add("error");

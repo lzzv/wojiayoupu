@@ -267,6 +267,32 @@ export class FamilyCloudStore {
     return data.user || null;
   }
 
+  async resetPasswordByFamilyAccount({ familyName, account, recoveryPasscode, password }) {
+    const { data, error } = await this.client.functions.invoke("password-reset-direct", {
+      body: { familyName, account, recoveryPasscode, password }
+    });
+    if (error) throw error;
+    if (!data?.ok) throw new Error(data?.error || "密码重置失败");
+    return data;
+  }
+
+  async getFamilyRecoveryPasscode(treeId) {
+    const { data, error } = await this.client.functions.invoke("family-recovery-passcode", {
+      body: { action: "get", treeId }
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async setFamilyRecoveryPasscode({ treeId, passcode }) {
+    const { data, error } = await this.client.functions.invoke("family-recovery-passcode", {
+      body: { action: "set", treeId, passcode }
+    });
+    if (error) throw error;
+    if (!data?.ok) throw new Error(data?.error || "家族口令保存失败");
+    return data;
+  }
+
   async signOut() {
     const { error } = await this.client.auth.signOut();
     if (error) throw error;
