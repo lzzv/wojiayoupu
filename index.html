@@ -770,15 +770,16 @@
       <div class="auth-step hidden" id="forgotStep">
         <label for="recoverEmail">找回邮箱</label>
         <input id="recoverEmail" type="email" autocomplete="email" placeholder="name@example.com" />
+        <p class="auth-email-hint">发送后请检查收件箱和垃圾邮件。若邮件里没有 6 位验证码，请直接点击邮件里的恢复链接。</p>
         <div class="auth-actions">
           <button id="requestRecoveryBtn" type="button">发送验证码</button>
           <button id="backToLoginBtn" type="button">返回登录</button>
         </div>
       </div>
       <div class="auth-step hidden" id="resetStep">
-        <label for="recoverOtp">邮箱验证码</label>
+        <label for="recoverOtp">邮箱验证码（可选）</label>
         <p class="auth-email-hint" id="recoveryEmailHint"></p>
-        <input id="recoverOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" />
+        <input id="recoverOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="收到验证码时再填写" />
         <label for="resetPassword">新密码</label>
         <input id="resetPassword" type="password" autocomplete="new-password" placeholder="至少 8 位密码" />
         <label for="resetPasswordConfirm">确认新密码</label>
@@ -1075,6 +1076,22 @@
       el.cloudStatus.textContent = label;
     }
 
+    function isRecoveryLinkMode() {
+      return new URLSearchParams(location.search).get("mode") === "recovery";
+    }
+
+    function recoveryResetHint() {
+      const email = (el.recoverEmail.value.trim() || authEmailPending).toLowerCase();
+      if (currentSession || isRecoveryLinkMode()) {
+        return email
+          ? `已打开 ${email} 的恢复链接。若邮件里同时附带 6 位验证码，也可以直接填写。`
+          : "已打开邮件恢复链接，请直接设置新密码；若邮件里有 6 位验证码，也可以填写。";
+      }
+      return email
+        ? `验证码已发送至 ${email}。如果邮件里没有 6 位验证码，请直接点击邮件里的恢复链接。`
+        : "请输入邮件中的 6 位验证码；如果邮件里没有验证码，请直接点击恢复链接。";
+    }
+
     function setAuthMode(mode, message = "", isError = false) {
       authMode = mode;
       el.loginStep.classList.toggle("hidden", mode !== "login");
@@ -1082,7 +1099,7 @@
       el.resetStep.classList.toggle("hidden", mode !== "reset");
       el.authPassword.required = mode === "login";
       el.recoverEmail.required = mode === "forgot";
-      el.recoverOtp.required = mode === "reset";
+      el.recoverOtp.required = false;
       el.resetPassword.required = mode === "reset";
       el.resetPasswordConfirm.required = mode === "reset";
       el.authMessage.textContent = message;
@@ -1090,8 +1107,7 @@
       if (mode === "forgot" && !el.recoverEmail.value) el.recoverEmail.value = el.authEmail.value.trim();
       if (mode === "reset" && !el.recoverEmail.value) el.recoverEmail.value = authEmailPending;
       if (mode === "reset") {
-        const email = (el.recoverEmail.value.trim() || authEmailPending).toLowerCase();
-        el.recoveryEmailHint.textContent = email ? `验证码已发送至 ${email}` : "请输入邮件中的六位验证码";
+        el.recoveryEmailHint.textContent = recoveryResetHint();
       }
     }
 
@@ -1135,6 +1151,12 @@
 
     function applyRequestedMode() {
       const requestedMode = new URLSearchParams(location.search).get("mode");
+      if (requestedMode === "recovery") {
+        const message = "已打开邮件恢复链接，请等待验证完成后设置新密码。若邮件里有 6 位验证码，也可以直接填写。";
+        showAuthGate(message, false);
+        setAuthMode("reset", message, false);
+        return;
+      }
       if (["timeline", "tree", "network"].includes(requestedMode)) state.viewMode = requestedMode;
       setMode(state.viewMode || "timeline", false);
     }
@@ -1222,8 +1244,8 @@
       if (event === "PASSWORD_RECOVERY") {
         authEmailPending = session?.user?.email || el.recoverEmail.value.trim().toLowerCase();
         setCloudStatus("locked", "重设密码");
-        showAuthGate("邮箱验证通过，请设置新密码。", false);
-        setAuthMode("reset", "邮箱验证通过，请设置新密码。", false);
+        showAuthGate("邮箱验证通过，请直接设置新密码。若邮件里有 6 位验证码，也可以填写。", false);
+        setAuthMode("reset", "邮箱验证通过，请直接设置新密码。若邮件里有 6 位验证码，也可以填写。", false);
         return;
       }
       if (!session) {
@@ -2180,7 +2202,7 @@
       authEmailPending = email;
       el.authMessage.textContent = "正在发送验证码...";
       await cloudStore.requestPasswordRecovery(email);
-      setAuthMode("reset", "验证码已发送，请检查收件箱和垃圾邮件。验证码一小时内有效。", false);
+      setAuthMode("reset", "找回邮件已发送，请检查收件箱和垃圾邮件。若邮件里没有 6 位验证码，请直接点击恢复链接。", false);
       startRecoveryResendCooldown();
     }
 
